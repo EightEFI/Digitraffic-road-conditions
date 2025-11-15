@@ -3,7 +3,7 @@ import aiohttp
 import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ ROAD_CONDITION_MAP = {
     "POOR": {"fi": "Huono ajokeli", "en": "Poor driving conditions"},
     # Actual forecast-sections API values
     "NORMAL_CONDITION": {"fi": "Normaali ajokelistä", "en": "Normal driving conditions"},
-    "MOIST": {"fi": "Tienpinta on märkä", "en": "Road surface is wet"},
+    "MOIST": {"fi": "Tienpinta on kostea", "en": "Road surface is damp"},
     "FROST": {"fi": "Tienpinnassa on kuuraa", "en": "Hoarfrost on road"},
     "ICE": {"fi": "Tienpinnassa on jäätä", "en": "Ice on road"},
     "PARTLY_ICY": {"fi": "Tienpinta on osittain jäinen", "en": "Road surface partly icy"},
@@ -397,15 +397,6 @@ class DigitraficClient:
                 else:
                     _LOGGER.warning("Could not resolve section title: %s", section_id)
             
-            # Generate mock forecast data for next 12 hours (every 2 hours)
-            forecasts = []
-            now = datetime.now()
-            # Round to next 2-hour mark
-            hours_to_next = 2 - (now.hour % 2)
-            if hours_to_next == 2:
-                hours_to_next = 0
-            start_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=hours_to_next)
-            
             # Try to use real API if session supports network calls
             if hasattr(self.session, "get"):
                 try:
@@ -421,12 +412,16 @@ class DigitraficClient:
                                         if f.get("type") == "FORECAST":
                                             time_iso = f.get("time")
                                             try:
-                                                dt = datetime.fromisoformat(time_iso.replace("Z", "+00:00"))
-                                                time_str = dt.strftime("%H:%M")
+                                                # Parse UTC time and convert to EET (UTC+2)
+                                                dt_utc = datetime.fromisoformat(time_iso.replace("Z", "+00:00"))
+                                                # Convert to EET (UTC+2)
+                                                eet = timezone(timedelta(hours=2))
+                                                dt_eet = dt_utc.astimezone(eet)
+                                                time_str = dt_eet.strftime("%H:%M")
                                             except Exception:
                                                 time_str = time_iso
                                             rc = f.get("forecastConditionReason", {}).get("roadCondition") or f.get("overallRoadCondition")
-                                            condition_text = ROAD_CONDITION_MAP.get(rc, {}).get(language, rc or "Unknown")
+                                            condition_text = ROAD_CONDITION_MAP.get(rc, {}).get(language, rc or "Unavailable")
                                             forecasts.append({
                                                 "type": "Feature",
                                                 "properties": {
@@ -435,29 +430,22 @@ class DigitraficClient:
                                                 },
                                                 "geometry": {"type": "Point", "coordinates": [0, 0]}
                                             })
-                                    return {"features": forecasts}
+                                    if forecasts:
+                                        return {"features": forecasts}
                 except Exception as err:
-                    _LOGGER.debug("Failed to fetch real forecast, falling back to mock: %s", err)
+                    _LOGGER.debug("Failed to fetch real forecast: %s", err)
 
-            # Fallback to mock forecast generation
-            if language == "en":
-                condition_list = ENGLISH_ROAD_CONDITIONS
-            else:
-                condition_list = FINNISH_ROAD_CONDITIONS
-            for i in range(0, 12, 2):  # Every 2 hours
-                forecast_time = start_time + timedelta(hours=i)
-                condition = condition_list[i % len(condition_list)]
-                forecasts.append({
+            # No real data available - return unavailable instead of mock
+            unavailable_text = "Tiedot eivät saatavilla" if language == "fi" else "Data unavailable"
+            return {
+                "features": [{
                     "type": "Feature",
                     "properties": {
-                        "time": forecast_time.strftime("%H:%M"),
-                        "condition": condition,
+                        "time": "N/A",
+                        "condition": unavailable_text,
                     },
                     "geometry": {"type": "Point", "coordinates": [0, 0]}
-                })
-
-            return {
-                "features": forecasts
+                }]
             }
         except Exception as err:
             _LOGGER.error("Error fetching forecast for %s: %s", section_id, err)
