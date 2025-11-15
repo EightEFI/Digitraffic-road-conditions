@@ -186,6 +186,35 @@ class DigitraficRoadConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         schema = vol.Schema({vol.Required("pick"): vol.In(choices)})
         return self.async_show_form(step_id="pick", data_schema=schema, errors=errors)
 
+    async def async_step_tms(self, user_input=None):
+        """Handle the TMS input step for monitor type TMS."""
+        errors = {}
+
+        if user_input is not None:
+            tms_input = user_input.get("tms_input", "").strip()
+            if not tms_input:
+                errors["base"] = "empty_search"
+            else:
+                # Create entry using the raw TMS id/string
+                monitor_type = MONITOR_TMS
+                unique_id = f"{monitor_type}_{tms_input}"
+                await self.async_set_unique_id(unique_id)
+                self._abort_if_unique_id_configured()
+
+                data = {
+                    CONF_MONITOR_TYPE: monitor_type,
+                    CONF_LANGUAGE: getattr(self, "language", "fi"),
+                }
+                data.update({CONF_TMS_ID: tms_input, CONF_ROAD_SECTION: tms_input})
+
+                return self.async_create_entry(title=tms_input, data=data)
+
+        return self.async_show_form(
+            step_id="tms",
+            data_schema=vol.Schema({vol.Required("tms_input", description={"suggested_value": "TMS id or name"}): str}),
+            errors=errors,
+        )
+
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
