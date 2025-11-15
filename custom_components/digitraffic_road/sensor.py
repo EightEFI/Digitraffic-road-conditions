@@ -1,5 +1,6 @@
 """Sensor platform for DigiTraffic."""
 import logging
+import re
 from datetime import timedelta
 from typing import Any, Dict
 
@@ -140,6 +141,55 @@ class DigitraficCurrentConditionsSensor(CoordinatorEntity, SensorEntity):
         return "mdi:road"
 
 
+def format_station_name(raw: str) -> str:
+    """Format station name for display.
+
+    Rules:
+    - If the raw name contains underscores, replace them with spaces and
+      capitalize each token (e.g., 'vt4_Marostenmäki' -> 'Vt4 Marostenmäki').
+    - Otherwise, title-case the words.
+    """
+    if not raw:
+        return ""
+    if "_" in raw:
+        s = raw.replace("_", " ")
+        tokens = s.split()
+        return " ".join(t.capitalize() for t in tokens)
+    # Default: title-case words (preserve numbers)
+    return " ".join(t.capitalize() for t in raw.split())
+
+
+def format_measurement_key(key: str) -> str:
+    """Format measurement key tokens according to agreed rules.
+
+    Rules:
+    - Keep underscores.
+    - Keep `VVAPAAS` and `MS1/MS2` uppercase.
+    - Convert `5MIN`/`60MIN` -> `5min`/`60min`.
+    - Title-case other tokens (e.g., `KESKINOPEUS` -> `Keskinopeus`, `LIUKUVA` -> `Liukuva`).
+    """
+    if not key:
+        return ""
+    tokens = key.split("_")
+    out = []
+    for t in tokens:
+        # Keep some tokens uppercase
+        if t.upper().startswith("VVAPAAS"):
+            out.append(t.upper())
+            continue
+        if t.upper() in ("MS1", "MS2"):
+            out.append(t.upper())
+            continue
+        # Convert time window tokens like '5MIN' or '60MIN'
+        m = re.match(r"^(\d+)MIN$", t, flags=re.IGNORECASE)
+        if m:
+            out.append(f"{m.group(1)}min")
+            continue
+        # Default: Title case
+        out.append(t.capitalize())
+    return "_".join(out)
+
+
 class DigitraficForecastSensor(CoordinatorEntity, SensorEntity):
     """Sensor for road condition forecast."""
 
@@ -214,7 +264,7 @@ class DigitraficTmsConstantsSensor(CoordinatorEntity, SensorEntity):
         self.station_id = station_id
         self._station_name = station_name
         self._attr_unique_id = f"{DOMAIN}_tms_{station_id}_constants"
-        self._attr_name = f"{station_name} - Sensor Constants"
+        self._attr_name = f"{format_station_name(station_name)} - Sensor Constants"
 
     @property
     def state(self) -> str | None:
@@ -251,7 +301,8 @@ class DigitraficTmsMeasurementSensor(CoordinatorEntity, SensorEntity):
         self._station_name = station_name
         self.measure_key = measure_key
         self._attr_unique_id = f"{DOMAIN}_tms_{station_id}_{measure_key}"
-        self._attr_name = f"{station_name} - {measure_key}"
+        # Use friendly formatting for station and measurement names
+        self._attr_name = f"{format_station_name(station_name)} - {format_measurement_key(measure_key)}"
 
     @property
     def state(self) -> str | None:
