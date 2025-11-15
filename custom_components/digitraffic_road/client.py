@@ -12,14 +12,14 @@ BASE_URL = "https://tie.digitraffic.fi/api/v1/data"
 # Finnish road condition descriptions
 FINNISH_ROAD_CONDITIONS = [
     "Tienpinta on kuiva",
-    "Tienpinnassa on märkää",
+    "Tien pinta on märkä",
     "Tienpinnassa on paikoin jäätä",
     "Tienpinnassa on mahdollisesti kuuraa",
     "Liukasta, tienpinnassa on jäätä tai lunta",
-    "Lumisade tai rankka sade",
+    "Lumisade tai rankka vesisade",
     "Raskas lumisade",
-    "Hyvät ajokeli",
-    "Huonot ajokeli",
+    "Hyvä ajokeli",
+    "Huono ajokeli",
 ]
 
 # Precise mock road sections based on Finnish road structure
