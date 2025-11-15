@@ -10,7 +10,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util.dt import utcnow
 
-from .const import DOMAIN, CONF_ROAD_SECTION, CONF_ROAD_SECTION_ID, SENSOR_TYPE_CONDITIONS, SENSOR_TYPE_FORECAST
+from .const import DOMAIN, CONF_ROAD_SECTION, CONF_ROAD_SECTION_ID, CONF_TMS_ID, SENSOR_TYPE_CONDITIONS, SENSOR_TYPE_FORECAST
 from .coordinator import DigitraficDataCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -23,9 +23,10 @@ async def async_setup_entry(
 ) -> None:
     """Set up sensor platform."""
     coordinator: DigitraficDataCoordinator = hass.data[DOMAIN][config_entry.entry_id]
-    
-    section_id = config_entry.data[CONF_ROAD_SECTION_ID]
-    section_name = config_entry.data[CONF_ROAD_SECTION]
+
+    # Support both road-section based entries and TMS-based entries.
+    section_id = config_entry.data.get(CONF_ROAD_SECTION_ID) or config_entry.data.get(CONF_TMS_ID)
+    section_name = config_entry.data.get(CONF_ROAD_SECTION) or section_id
 
     entities = [
         DigitraficCurrentConditionsSensor(coordinator, section_id, section_name),
