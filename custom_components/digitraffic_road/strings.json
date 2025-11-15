@@ -2,10 +2,10 @@
   "config": {
     "step": {
       "user": {
-        "title": "Add Road Section",
-        "description": "Enter the exact road section title from https://liikennetilanne.fintraffic.fi/kartta/\n\nClick on a road section in the Fintraffic map and copy the title shown (e.g., \"{example}\").\n\nThis allows you to monitor any specific road section with its own independent driving conditions.",
+        "title": "Lisää tieosuus",
+        "description": "Syötä tarkka tieosuuden otsikko sivulta https://liikennetilanne.fintraffic.fi/kartta/\n\nKlikkaa tieosuutta FinTraffic kartalla ja kopioi tieosuus (esim. \"{example}\").\n\nTämä mahdollistaa tietyn tieosuuden olosuhteiden noutamisen",
         "data": {
-          "section_input": "Road section title (copy from Fintraffic map)"
+          "section_input": "Tieosuuden otsikko (kopioi FinTraffic kartalta)"
         }
       },
       "select": {
@@ -17,14 +17,14 @@
       }
     },
     "error": {
-      "empty_search": "Please enter a road section title from the Fintraffic map",
+      "empty_search": "Syötä tieosuuden otsikko FinTraffic kartalta",
       "no_results": "No road sections found. Try searching for a different road number or location name.",
-      "cannot_connect": "Failed to connect to Digitraffic service. Please try again.",
+      "cannot_connect": "Ei voitu yhdistää DigiTraffic palveluihin. Yritä uudelleen",
       "unknown": "An unexpected error occurred"
     },
     "abort": {
-      "already_configured": "This road section is already configured",
-      "cannot_connect": "Failed to connect to Digitraffic service"
+      "already_configured": "Tämä tieosuus on jo konfiguroitu",
+      "cannot_connect": "Ei voitu yhdistää DigiTraffic palveluihin"
     }
   },
   "options": {

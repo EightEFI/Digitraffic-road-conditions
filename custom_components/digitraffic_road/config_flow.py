@@ -54,7 +54,7 @@ class DigitraficRoadConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required("section_input"): str,
+                    vol.Required("section_input", description={"suggested_value": "Tie 4: Kemintie 4.421"}): str,
                 }
             ),
             errors=errors,
