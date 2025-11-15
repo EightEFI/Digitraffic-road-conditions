@@ -32,9 +32,11 @@ A custom Home Assistant integration that fetches real-time road condition data f
 
 1. Go to **Settings** → **Devices & Services** → **Integrations**
 2. Click **Create Integration** and search for "Digitraffic Road Conditions"
-3. Search for your desired road section (e.g., "E18", "VT4", "Kemintie", "Hämeentie")
-4. Select the specific section from the results
-5. The integration will create two entities:
+3. Open the [Fintraffic road conditions map](https://liikennetilanne.fintraffic.fi/kartta/)
+4. Click on any specific road section you want to monitor
+5. Copy the exact title shown (e.g., "Tie 4: Kemintie 4.421")
+6. Paste it into the integration setup form
+7. The integration will create two entities for this specific section:
    - **Current Conditions**: Shows the current road conditions in Finnish
    - **12h Forecast**: Shows the road condition forecast for the next 12 hours
 
@@ -63,23 +65,14 @@ Example forecast output:
 
 ## Available Road Sections
 
-The integration includes searchable road sections across Finland:
+You can monitor **any specific road section** from Finland by copying the exact title from the [Fintraffic road conditions map](https://liikennetilanne.fintraffic.fi/kartta/).
 
-**European Routes (E-roads)**
-- E18: Tietokatu, Kehä III - Espoo boundary
-- E75: Hakamäentie, Lohja area
+Simply:
+1. Click on a road section in the map
+2. Copy the title (e.g., "Tie 4: Kemintie 4.421")
+3. Paste it into the integration setup
 
-**National Routes (Valtatie)**
-- VT1: Hämeentie, Karviainen area
-- VT3: Länsimetro area
-- VT4: Tuusula, Perämerentie, Oulu area
-- VT22: **Kemintie** (Kemi - Oulu)
-
-**Regional Routes (Seututie)**
-- ST101: Itäväylä
-- ST105: Länsiväylä
-
-You can search by road number (E18, VT4), location name (Kemintie, Hämeentie), city, or area.
+This gives you precise, location-specific driving conditions rather than broad road regions.
 
 ## Road Condition Descriptions
 
