@@ -187,17 +187,77 @@ class DigitraficRoadConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(step_id="pick", data_schema=schema, errors=errors)
 
     async def async_step_tms(self, user_input=None):
-        """Handle the TMS input step for monitor type TMS."""
+        """Handle the TMS input step for monitor type TMS.
+
+        This step searches the Digitraffic TMS stations list by the user's input
+        (matching `names.fi`, `names.sv`, `names.en`, and `properties.name`).
+        If multiple matches are found, present a dropdown for the user to pick.
+        """
         errors = {}
 
+        session = async_get_clientsession(self.hass)
+        client = DigitraficClient(session)
+
+        # If user submitted input
         if user_input is not None:
             tms_input = user_input.get("tms_input", "").strip()
             if not tms_input:
                 errors["base"] = "empty_search"
             else:
-                # Create entry using the raw TMS id/string
+                try:
+                    candidates = await client.async_search_tms_stations(tms_input, max_results=12)
+                except Exception as err:
+                    _LOGGER.exception("TMS search failed: %s", err)
+                    candidates = []
+
+                if not candidates:
+                    errors["base"] = "no_matches"
+                elif len(candidates) == 1:
+                    props = candidates[0]
+                    chosen_id = props.get("id")
+                    section_name = props.get("names", {}).get("fi") or props.get("name") or str(chosen_id)
+
+                    monitor_type = MONITOR_TMS
+                    unique_id = f"{monitor_type}_{chosen_id}"
+                    await self.async_set_unique_id(unique_id)
+                    self._abort_if_unique_id_configured()
+
+                    data = {
+                        CONF_MONITOR_TYPE: monitor_type,
+                        CONF_LANGUAGE: getattr(self, "language", "fi"),
+                    }
+                    data.update({CONF_TMS_ID: chosen_id, CONF_ROAD_SECTION: section_name})
+
+                    return self.async_create_entry(title=section_name, data=data)
+                else:
+                    # multiple matches - present pick step for TMS
+                    self._tms_candidates = candidates
+                    self._tms_raw = tms_input
+                    return await self.async_step_tms_pick()
+
+        return self.async_show_form(
+            step_id="tms",
+            data_schema=vol.Schema({vol.Required("tms_input", description={"suggested_value": "Tie 3 Vaasa"}): str}),
+            errors=errors,
+        )
+
+    async def async_step_tms_pick(self, user_input=None):
+        """Allow the user to pick one of the TMS station candidates."""
+        if not hasattr(self, "_tms_candidates") or not self._tms_candidates:
+            return await self.async_step_tms()
+
+        errors = {}
+        if user_input is not None and "pick" in user_input:
+            pick_id = user_input.get("pick")
+            props = next((p for p in self._tms_candidates if str(p.get("id")) == str(pick_id)), None)
+            if not props:
+                errors["base"] = "invalid_selection"
+            else:
+                chosen_id = props.get("id")
+                section_name = props.get("names", {}).get("fi") or props.get("name") or str(chosen_id)
                 monitor_type = MONITOR_TMS
-                unique_id = f"{monitor_type}_{tms_input}"
+
+                unique_id = f"{monitor_type}_{chosen_id}"
                 await self.async_set_unique_id(unique_id)
                 self._abort_if_unique_id_configured()
 
@@ -205,15 +265,19 @@ class DigitraficRoadConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_MONITOR_TYPE: monitor_type,
                     CONF_LANGUAGE: getattr(self, "language", "fi"),
                 }
-                data.update({CONF_TMS_ID: tms_input, CONF_ROAD_SECTION: tms_input})
+                data.update({CONF_TMS_ID: chosen_id, CONF_ROAD_SECTION: section_name})
 
-                return self.async_create_entry(title=tms_input, data=data)
+                return self.async_create_entry(title=section_name, data=data)
 
-        return self.async_show_form(
-            step_id="tms",
-            data_schema=vol.Schema({vol.Required("tms_input", description={"suggested_value": "TMS id or name"}): str}),
-            errors=errors,
-        )
+        choices = {}
+        for p in self._tms_candidates:
+            rid = p.get("id")
+            names = p.get("names", {})
+            label = f"{rid} — {names.get('fi') or names.get('en') or p.get('name') or ''}"
+            choices[str(rid)] = label
+
+        schema = vol.Schema({vol.Required("pick"): vol.In(choices)})
+        return self.async_show_form(step_id="tms_pick", data_schema=schema, errors=errors)
 
     @staticmethod
     @callback

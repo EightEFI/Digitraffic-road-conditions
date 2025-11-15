@@ -13,6 +13,8 @@ _LOGGER = logging.getLogger(__name__)
 BASE_URL = "https://tie.digitraffic.fi/api/v1/data"
 FORECAST_SECTIONS_URL = "https://tie.digitraffic.fi/api/weather/v1/forecast-sections/forecasts"
 FORECAST_SECTIONS_METADATA_URL = "https://tie.digitraffic.fi/api/weather/v1/forecast-sections"
+TMS_STATIONS_URL = "https://tie.digitraffic.fi/api/tms/v1/stations"
+TMS_STATION_URL = "https://tie.digitraffic.fi/api/tms/v1/stations/{id}"
 
 # Finnish road condition descriptions
 FINNISH_ROAD_CONDITIONS = [
@@ -428,6 +430,71 @@ class DigitraficClient:
         except Exception as err:
             _LOGGER.warning("Error resolving candidates: %s", err)
             return []
+
+    async def async_search_tms_stations(self, query: str, max_results: int = 12) -> List[Dict[str, Any]]:
+        """Search TMS stations by name.
+
+        Matches against `properties.names` (fi/sv/en) and `properties.name`.
+        Returns a list of `properties` dicts for matching stations.
+        """
+        try:
+            async with self.session.get(TMS_STATIONS_URL, headers={"Accept": "application/json"}) as resp:
+                if resp.status != 200:
+                    _LOGGER.debug("TMS stations endpoint returned %d", resp.status)
+                    return []
+                # API requires gzip; aiohttp handles compression automatically
+                data = await resp.json()
+                features = data.get("features", [])
+
+            norm = self._normalize_string(query)
+            tokens = set(norm.split())
+
+            matches: List[Tuple[int, Dict[str, Any]]] = []
+            for feat in features:
+                props = feat.get("properties", {})
+                # Look into names dict first
+                names = props.get("names", {}) or {}
+                candidates = [names.get(k, "") for k in ("fi", "sv", "en")] + [props.get("name", "")]
+                for cand in candidates:
+                    if not cand:
+                        continue
+                    norm_cand = self._normalize_string(cand)
+                    # exact normalized match gets highest priority
+                    if norm_cand == norm:
+                        matches.append((100, props))
+                        break
+                    # token overlap scoring
+                    common = tokens & set(norm_cand.split())
+                    if common:
+                        matches.append((len(common), props))
+                        break
+
+            # Deduplicate by id keeping highest score
+            best: Dict[Any, Tuple[int, Dict[str, Any]]] = {}
+            for score, p in matches:
+                pid = p.get("id")
+                if pid not in best or score > best[pid][0]:
+                    best[pid] = (score, p)
+
+            scored = sorted((s, p) for s, p in best.values())
+            scored.reverse()
+            return [p for _, p in scored[:max_results]]
+        except Exception as err:
+            _LOGGER.debug("Error searching TMS stations: %s", err)
+            return []
+
+    async def async_get_tms_station(self, station_id: int) -> Optional[Dict[str, Any]]:
+        """Fetch a single TMS station feature by id."""
+        try:
+            url = TMS_STATION_URL.format(id=station_id)
+            async with self.session.get(url, headers={"Accept": "application/json"}) as resp:
+                if resp.status != 200:
+                    _LOGGER.debug("TMS station %s returned %d", station_id, resp.status)
+                    return None
+                return await resp.json()
+        except Exception as err:
+            _LOGGER.debug("Error fetching TMS station %s: %s", station_id, err)
+            return None
 
     def save_override(self, user_input: str, section_id: str) -> bool:
         """Persist a user override mapping from the normalized user_input to section_id.
