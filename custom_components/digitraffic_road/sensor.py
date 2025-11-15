@@ -304,9 +304,11 @@ class DigitraficTmsMeasurementSensor(CoordinatorEntity, SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_tms_{station_id}_{measure_key}"
         # Use friendly formatting for station and measurement names
         self._attr_name = f"{format_station_name(station_name)} - {format_measurement_key(measure_key)}"
+        # Enable HA statistics and graphing
+        self._attr_state_class = "measurement"
 
     @property
-    def state(self) -> str | None:
+    def state(self) -> Any:
         data = self.coordinator.data or {}
         # Try sensor constants first (some keys like VVAPAAS may be constants)
         sc = data.get("sensor_constants") or {}
@@ -323,7 +325,7 @@ class DigitraficTmsMeasurementSensor(CoordinatorEntity, SensorEntity):
             m = measurements.get(self.measure_key)
             if isinstance(m, dict) and "value" in m:
                 return m.get("value")
-            # If measurement entry is a raw value, return it
+            # If measurement entry is a raw value, return it (numeric)
             return m
 
         # No data available yet
@@ -332,6 +334,21 @@ class DigitraficTmsMeasurementSensor(CoordinatorEntity, SensorEntity):
     @property
     def available(self) -> bool:
         return self.coordinator.last_update_success
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        """Return the unit of measurement from coordinator data."""
+        data = self.coordinator.data or {}
+        measurements = data.get("measurements") or {}
+        if isinstance(measurements, dict) and self.measure_key in measurements:
+            m = measurements.get(self.measure_key)
+            if isinstance(m, dict) and "unit" in m:
+                unit = m.get("unit")
+                # Handle special unit cases (°, km/h, %, kpl/h)
+                if unit == "***":
+                    return "%"  # Common placeholder for percentage
+                return unit
+        return None
 
     @property
     def icon(self) -> str:
