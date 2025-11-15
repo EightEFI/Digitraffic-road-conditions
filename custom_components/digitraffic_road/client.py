@@ -2,6 +2,8 @@
 import aiohttp
 import logging
 import re
+import json
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timedelta, timezone
 
@@ -205,11 +207,42 @@ class DigitraficClient:
         """
         try:
             _LOGGER.debug("Attempting to resolve section ID for: %s", user_input)
+
+            # Check for user overrides first (persistent mapping from query -> section id)
+            try:
+                overrides_path = Path(__file__).parent / "overrides.json"
+                if overrides_path.exists():
+                    with overrides_path.open("r", encoding="utf-8") as fh:
+                        overrides = json.load(fh)
+                    # use normalized key to match stored overrides
+                    norm_key = self._normalize_string(user_input)
+                    mapped = overrides.get(norm_key)
+                    if mapped:
+                        _LOGGER.debug("Found override for '%s' -> %s", user_input, mapped)
+                        return mapped
+            except Exception as e:
+                _LOGGER.debug("Failed to read overrides: %s", e)
             
             # If input looks like an ID (numeric pattern), return as-is
             if re.match(r"^[0-9]{5}_\d+", user_input):
                 return user_input
-            
+
+            # Prefer numeric parsing: if the user entered a road + km marker (e.g. "Valtatie 3 3.250")
+            # then try to find metadata entries that match roadNumber and roadSectionNumber
+            try:
+                candidates = await self.resolve_section_candidates(user_input, max_candidates=8)
+                if candidates:
+                    # If resolve_section_candidates returned exact numeric matches, they will be first.
+                    # Choose the best candidate deterministically (first in list).
+                    first = candidates[0]
+                    cid = first.get('id')
+                    if cid:
+                        _LOGGER.debug("Resolved '%s' to section %s via numeric/metadata match", user_input, cid)
+                        return cid
+            except Exception as e:
+                _LOGGER.debug("Numeric candidate resolution failed: %s", e)
+
+            # Fallback: original text token overlap approach (if numeric/match not found)
             async with self.session.get(FORECAST_SECTIONS_METADATA_URL) as resp:
                 if resp.status != 200:
                     _LOGGER.debug("Metadata endpoint returned %d", resp.status)
@@ -218,35 +251,208 @@ class DigitraficClient:
                 data = await resp.json()
                 features = data.get("features", [])
                 
-                norm_user = self._normalize_string(user_input)
-                user_tokens = set(norm_user.split())
-                
-                candidates = []
-                for feat in features:
-                    props = feat.get("properties", {})
-                    desc = props.get("description", "")
-                    if desc:
-                        norm_desc = self._normalize_string(desc)
-                        desc_tokens = set(norm_desc.split())
-                        common = user_tokens & desc_tokens
-                        if len(common) > 0:
-                            score = len(common)
-                            section_id = props.get("id")
-                            candidates.append((score, section_id, desc))
-                
-                if candidates:
-                    candidates.sort(reverse=True, key=lambda x: x[0])
-                    best_score, best_id, best_desc = candidates[0]
+            norm_user = self._normalize_string(user_input)
+            user_tokens = set(norm_user.split())
+            
+            candidates = []
+            for feat in features:
+                props = feat.get("properties", {})
+                desc = props.get("description", "")
+                if desc:
+                    norm_desc = self._normalize_string(desc)
+                    desc_tokens = set(norm_desc.split())
+                    common = user_tokens & desc_tokens
+                    if len(common) > 0:
+                        score = len(common)
+                        section_id = props.get("id")
+                        candidates.append((score, section_id, desc))
+
+            if candidates:
+                # Sort by text match score (descending)
+                candidates.sort(reverse=True, key=lambda x: x[0])
+                best_score = candidates[0][0]
+                # Gather all top-scoring candidates
+                top_candidates = [c for c in candidates if c[0] == best_score]
+
+                # If only one top candidate, return it
+                if len(top_candidates) == 1:
+                    _, best_id, best_desc = top_candidates[0]
                     _LOGGER.debug("Resolved '%s' to section %s (score %d, desc: %s)", 
                                  user_input, best_id, best_score, best_desc)
                     return best_id
-                else:
-                    _LOGGER.debug("No matching section found for: %s", user_input)
-                    return None
+
+                # Tie-breaker: fetch forecast feed and score candidates by forecast content
+                try:
+                    async with self.session.get(FORECAST_SECTIONS_URL) as fresp:
+                        if fresp.status == 200:
+                            fdata = await fresp.json()
+                            fs_map = {fs.get('id'): fs for fs in fdata.get('forecastSections', [])}
+                            best_candidate = None
+                            best_tie_score = -1
+                            for _, cid, cdesc in top_candidates:
+                                fs = fs_map.get(cid)
+                                if not fs:
+                                    continue
+                                tie_score = 0
+                                # Score based on forecasts: prefer NORMAL_CONDITION and MOIST
+                                for f in fs.get('forecasts', []):
+                                    if f.get('type') != 'FORECAST':
+                                        continue
+                                    if f.get('overallRoadCondition') == 'NORMAL_CONDITION':
+                                        tie_score += 2
+                                    if f.get('forecastConditionReason', {}).get('roadCondition') == 'MOIST':
+                                        tie_score += 1
+                                if tie_score > best_tie_score:
+                                    best_tie_score = tie_score
+                                    best_candidate = cid
+                            if best_candidate:
+                                _LOGGER.debug("Resolved '%s' to section %s by forecast tie-breaker (text score %d, tie score %d)",
+                                             user_input, best_candidate, best_score, best_tie_score)
+                                return best_candidate
+                except Exception as e:
+                    _LOGGER.debug("Tie-breaker forecast check failed: %s", e)
+
+                # Fallback: return first top candidate
+                _, best_id, best_desc = top_candidates[0]
+                _LOGGER.debug("Resolved '%s' to section %s (score %d, desc: %s) [fallback]", 
+                             user_input, best_id, best_score, best_desc)
+                return best_id
         
         except Exception as err:
             _LOGGER.warning("Error resolving section ID: %s", err)
             return None
+
+    async def resolve_section_candidates(self, user_input: str, max_candidates: int = 8) -> List[Dict[str, Any]]:
+        """Return candidate metadata entries for a user-entered section title.
+
+        This method first attempts to parse explicit road and km markers from the
+        user input (e.g. "Valtatie 3 3.250" -> roadNumber=3, roadSectionNumber=250)
+        and returns exact metadata matches. If no explicit numeric match is found,
+        it falls back to token-overlap scoring and returns the top-scoring
+        metadata entries.
+
+        Returns a list of property dictionaries (as returned by the metadata
+        endpoint) ordered by relevance.
+        """
+        try:
+            async with self.session.get(FORECAST_SECTIONS_METADATA_URL) as resp:
+                if resp.status != 200:
+                    _LOGGER.debug("Metadata endpoint returned %d", resp.status)
+                    return []
+                data = await resp.json()
+                features = data.get("features", [])
+
+            norm = self._normalize_string(user_input)
+
+            # First: exact-match against the `description` field (normalized).
+            # This allows the config flow to compare the user's typed label directly
+            # to the authoritative metadata `description` and present exact matches
+            # for the user to pick from if there are multiple identical descriptions.
+            exact_matches: List[Dict[str, Any]] = []
+            for feat in features:
+                props = feat.get("properties", {})
+                desc = props.get("description", "") or props.get("name", "")
+                if desc and self._normalize_string(desc) == norm:
+                    exact_matches.append(props)
+            if exact_matches:
+                return exact_matches[:max_candidates]
+
+            # If user input contains a ':' it's likely in the form "Tie 717: Vähäkyröntie 717.6".
+            # In that case, try to parse road number from the left side and exact description
+            # from the right side and return all metadata entries that match both.
+            if ':' in user_input:
+                try:
+                    left, right = user_input.split(':', 1)
+                    left = left.strip()
+                    right = right.strip()
+                    # Try to extract road number from left part
+                    mroad = re.search(r"(?:tie|vt|valtatie|st)?\s*(\d{1,4})\b", left, flags=re.IGNORECASE)
+                    if mroad:
+                        road_num = int(mroad.group(1))
+                        norm_right = self._normalize_string(right)
+                        matched: List[Dict[str, Any]] = []
+                        for feat in features:
+                            props = feat.get("properties", {})
+                            if props.get("roadNumber") != road_num:
+                                continue
+                            desc = props.get("description", "") or props.get("name", "")
+                            if desc and self._normalize_string(desc) == norm_right:
+                                matched.append(props)
+                        if matched:
+                            return matched[:max_candidates]
+                except Exception:
+                    pass
+
+            # Try to extract patterns like '3 3.250' or 'valtatie 3 3.250' or 'vt3 3.250'
+            # Look for the first occurrence of a road number and a km marker
+            road_num = None
+            section_num = None
+            m = re.search(r"(?:vt|valtatie|tie)?\s*(\d{1,3})[^0-9]{0,3}(\d+\.\d+)", user_input, flags=re.IGNORECASE)
+            if m:
+                try:
+                    road_num = int(m.group(1))
+                    km = float(m.group(2))
+                    # roadSectionNumber in metadata appears to be the decimal part * 1000
+                    frac = km - int(km)
+                    section_num = int(round(frac * 1000))
+                except Exception:
+                    road_num = None
+                    section_num = None
+
+            candidates: List[Dict[str, Any]] = []
+
+            # If we parsed numeric road + section, prefer exact matches
+            if road_num is not None and section_num is not None:
+                for feat in features:
+                    props = feat.get("properties", {})
+                    if props.get("roadNumber") == road_num and props.get("roadSectionNumber") == section_num:
+                        candidates.append(props)
+                if candidates:
+                    return candidates[:max_candidates]
+
+            # Fallback: token-overlap scoring (as before)
+            user_tokens = set(norm.split())
+            scored = []
+            for feat in features:
+                props = feat.get("properties", {})
+                desc = props.get("description", "") or props.get("name", "")
+                if not desc:
+                    continue
+                norm_desc = self._normalize_string(desc)
+                desc_tokens = set(norm_desc.split())
+                score = len(user_tokens & desc_tokens)
+                if score > 0:
+                    scored.append((score, props))
+            scored.sort(key=lambda x: (-x[0], x[1].get("id", "")))
+            return [p for _, p in scored[:max_candidates]]
+        except Exception as err:
+            _LOGGER.warning("Error resolving candidates: %s", err)
+            return []
+
+    def save_override(self, user_input: str, section_id: str) -> bool:
+        """Persist a user override mapping from the normalized user_input to section_id.
+
+        Returns True on success.
+        """
+        try:
+            overrides_path = Path(__file__).parent / "overrides.json"
+            overrides = {}
+            if overrides_path.exists():
+                with overrides_path.open("r", encoding="utf-8") as fh:
+                    try:
+                        overrides = json.load(fh)
+                    except Exception:
+                        overrides = {}
+
+            key = self._normalize_string(user_input)
+            overrides[key] = section_id
+            with overrides_path.open("w", encoding="utf-8") as fh:
+                json.dump(overrides, fh, ensure_ascii=False, indent=2)
+            _LOGGER.debug("Saved override: %s -> %s", key, section_id)
+            return True
+        except Exception as err:
+            _LOGGER.warning("Failed to save override: %s", err)
+            return False
 
     async def search_road_sections(self, query: str) -> List[Dict[str, Any]]:
         """Search for road sections by name, road number, or location.
@@ -430,6 +636,9 @@ class DigitraficClient:
                                             # Get specific road condition
                                             road_rc = f.get("forecastConditionReason", {}).get("roadCondition")
                                             road_text = ROAD_CONDITION_MAP.get(road_rc, {}).get(language, road_rc or "")
+                                            # Make specific condition lowercase
+                                            if road_text:
+                                                road_text = road_text[0].lower() + road_text[1:] if len(road_text) > 0 else road_text
                                             
                                             # Combine both conditions
                                             if overall_text and road_text:

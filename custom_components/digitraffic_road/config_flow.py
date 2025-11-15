@@ -77,37 +77,51 @@ class DigitraficRoadConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "empty_search"
             else:
                 _LOGGER.debug("Road section input: %s", section_input)
-                # Use the input as-is for the section ID (will be used to fetch conditions)
-                section_id = section_input.replace(" ", "_").replace(":", "").replace(".", "_")
-                section_name = section_input
 
-                # Default monitor type to conditions if not set
-                monitor_type = getattr(self, "monitor_type", MONITOR_CONDITIONS)
+                # Resolve candidates using the client (may return 0, 1 or many)
+                session = async_get_clientsession(self.hass)
+                client = DigitraficClient(session)
+                try:
+                    candidates = await client.resolve_section_candidates(section_input, max_candidates=12)
+                except Exception as err:
+                    _LOGGER.exception("Candidate resolution failed: %s", err)
+                    candidates = []
 
-                # Create a unique id combining monitor type and normalized input
-                unique_id = f"{monitor_type}_{section_id}"
+                if not candidates:
+                    errors["base"] = "no_matches"
+                elif len(candidates) == 1:
+                    # Single candidate -> create entry directly
+                    props = candidates[0]
+                    chosen_id = props.get("id")
+                    section_name = props.get("description") or props.get("name") or section_input
 
-                # Check if already configured
-                await self.async_set_unique_id(unique_id)
-                self._abort_if_unique_id_configured()
+                    # Default monitor type to conditions if not set
+                    monitor_type = getattr(self, "monitor_type", MONITOR_CONDITIONS)
 
-                _LOGGER.debug("Creating config entry for section: %s", section_name)
+                    unique_id = f"{monitor_type}_{chosen_id}"
+                    await self.async_set_unique_id(unique_id)
+                    self._abort_if_unique_id_configured()
 
-                data = {
-                    CONF_MONITOR_TYPE: monitor_type,
-                    CONF_LANGUAGE: getattr(self, "language", "fi"),
-                }
+                    data = {
+                        CONF_MONITOR_TYPE: monitor_type,
+                        CONF_LANGUAGE: getattr(self, "language", "fi"),
+                    }
 
-                if monitor_type == MONITOR_CONDITIONS:
-                    data.update({
-                        CONF_ROAD_SECTION_ID: section_input,
-                        CONF_ROAD_SECTION: section_name,
-                    })
+                    if monitor_type == MONITOR_CONDITIONS:
+                        data.update({
+                            CONF_ROAD_SECTION_ID: chosen_id,
+                            CONF_ROAD_SECTION: section_name,
+                        })
+                    else:
+                        data.update({CONF_TMS_ID: chosen_id, CONF_ROAD_SECTION: section_name})
+
+                    return self.async_create_entry(title=section_name, data=data)
                 else:
-                    # For other monitor types, store the raw input into tms id field as a fallback
-                    data.update({CONF_TMS_ID: section_input, CONF_ROAD_SECTION: section_name})
-
-                return self.async_create_entry(title=section_name, data=data)
+                    # Multiple candidates -> present a pick step (dropdown)
+                    # Store candidates temporarily and move to pick step
+                    self._candidates = candidates
+                    self._raw_input = section_input
+                    return await self.async_step_pick()
 
         # Show input form
         return self.async_show_form(
@@ -122,6 +136,55 @@ class DigitraficRoadConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "example": "Tie 4: Kemintie 4.421"
             },
         )
+
+    async def async_step_pick(self, user_input=None):
+        """Allow the user to pick one of the candidate metadata entries.
+
+        Expects `self._candidates` to be populated by `async_step_section`.
+        """
+        if not hasattr(self, "_candidates") or not self._candidates:
+            return await self.async_step_section()
+
+        errors = {}
+
+        if user_input is not None and "pick" in user_input:
+            pick_id = user_input.get("pick")
+            # Find selected props
+            props = next((p for p in self._candidates if p.get("id") == pick_id), None)
+            if not props:
+                errors["base"] = "invalid_selection"
+            else:
+                chosen_id = props.get("id")
+                section_name = props.get("description") or props.get("name") or pick_id
+                monitor_type = getattr(self, "monitor_type", MONITOR_CONDITIONS)
+
+                unique_id = f"{monitor_type}_{chosen_id}"
+                await self.async_set_unique_id(unique_id)
+                self._abort_if_unique_id_configured()
+
+                data = {
+                    CONF_MONITOR_TYPE: monitor_type,
+                    CONF_LANGUAGE: getattr(self, "language", "fi"),
+                }
+                if monitor_type == MONITOR_CONDITIONS:
+                    data.update({CONF_ROAD_SECTION_ID: chosen_id, CONF_ROAD_SECTION: section_name})
+                else:
+                    data.update({CONF_TMS_ID: chosen_id, CONF_ROAD_SECTION: section_name})
+
+                return self.async_create_entry(title=section_name, data=data)
+
+        # Build choices mapping id -> label
+        choices = {}
+        for p in self._candidates:
+            rid = p.get("id")
+            desc = p.get("description") or p.get("name") or ""
+            rn = p.get("roadNumber")
+            rs = p.get("roadSectionNumber")
+            label = f"{rid} — {desc} (road={rn}, section={rs})"
+            choices[rid] = label
+
+        schema = vol.Schema({vol.Required("pick"): vol.In(choices)})
+        return self.async_show_form(step_id="pick", data_schema=schema, errors=errors)
 
     @staticmethod
     @callback

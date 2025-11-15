@@ -1,70 +1,134 @@
 #!/usr/bin/env python3
-"""Demo script showing the road section search functionality."""
+"""Test forecast search for 'Tie 3: Valtatie 3 3.250'."""
 
 import asyncio
-import sys
-sys.path.insert(0, '/workspaces/Digitraffic-road-conditions/custom_components/digitraffic_road')
-
-from client import DigitraficClient
 import aiohttp
+from datetime import datetime, timezone, timedelta
+import re
 
+FORECAST_SECTIONS_URL = "https://tie.digitraffic.fi/api/weather/v1/forecast-sections/forecasts"
+FORECAST_SECTIONS_METADATA_URL = "https://tie.digitraffic.fi/api/weather/v1/forecast-sections"
 
-async def demo_search():
-    """Demonstrate the search functionality."""
-    print("=" * 70)
-    print("DigiTraffic - Search functionality demo")
-    print("=" * 70)
+ROAD_CONDITION_MAP = {
+    "DRY": {"fi": "Kuiva", "en": "Dry"},
+    "WET": {"fi": "Märkä", "en": "Wet"},
+    "FROST": {"fi": "Kuuraa", "en": "Frost"},
+    "ICE": {"fi": "Jäätä", "en": "Ice"},
+    "MOIST": {"fi": "Kostea", "en": "Damp"},
+    "PARTLY_ICY": {"fi": "Osittain jäätä", "en": "Partly icy"},
+    "SLUSH": {"fi": "Loskaa", "en": "Slush"},
+    "SNOW": {"fi": "Lunta", "en": "Snow"},
+    "NORMAL_CONDITION": {"fi": "Hyvä ajokeli", "en": "Good driving conditions"},
+    "POOR_CONDITION": {"fi": "Huono ajokeli", "en": "Poor driving conditions"},
+    "EXTREMELY_POOR_CONDITION": {"fi": "Erittäin huono ajokeli", "en": "Extremely poor driving conditions"},
+}
+
+def _normalize_string(s: str) -> str:
+    """Normalize string for comparison."""
+    s = s.lower()
+    s = re.sub(r'[^\w\s]', ' ', s)
+    s = re.sub(r'\s+', ' ', s).strip()
+    return s
+
+async def resolve_section_id(session, user_input: str):
+    """Resolve user input to section ID."""
+    if re.match(r"^[0-9]{5}_\d+", user_input):
+        return user_input
     
-    async with aiohttp.ClientSession() as session:
-        client = DigitraficClient(session)
-        
-        # Example search queries
-        test_queries = [
-            "E18",
-            "VT4",
-            "Perämerentie",
-            "Hämeentie",
-            "Helsinki",
-            "Tampere",
-            "v",
-            "st",
-        ]
-        
-        for query in test_queries:
-            print(f"\n📍 Searching for: '{query}'")
-            print("-" * 70)
+    try:
+        async with session.get(FORECAST_SECTIONS_METADATA_URL) as resp:
+            if resp.status != 200:
+                return None
             
-            results = await client.search_road_sections(query)
+            data = await resp.json()
+            features = data.get("features", [])
             
-            if results:
-                print(f"✓ Found {len(results)} result(s):\n")
-                for i, section in enumerate(results, 1):
-                    road = section.get("road", "N/A")
-                    name = section.get("name", "N/A")
-                    location = section.get("location", "N/A")
-                    km = section.get("km", "N/A")
-                    description = section.get("description", "N/A")
-                    section_id = section.get("id", "N/A")
-                    
-                    print(f"  {i}. {name}")
-                    print(f"     Road: {road}")
-                    print(f"     Location: {location}")
-                    print(f"     KM: {km}")
-                    print(f"     Description: {description}")
-                    print(f"     ID: {section_id}")
-                    print()
-            else:
-                print("✗ No results found")
-        
-        print("\n" + "=" * 70)
-        print("All available road sections:")
-        print("=" * 70)
-        
-        all_sections = await client.get_road_sections()
-        for section in all_sections:
-            props = section.get("properties", {})
-            print(f"  • {props.get('name')} ({props.get('road')}): {props.get('location')} [{props.get('km')}]")
+            normalized_input = _normalize_string(user_input)
+            input_tokens = set(normalized_input.split())
+            
+            best_match = None
+            best_score = 0
+            
+            for feature in features:
+                props = feature.get("properties", {})
+                description = props.get("description", "")
+                
+                normalized_desc = _normalize_string(description)
+                desc_tokens = set(normalized_desc.split())
+                
+                overlap = len(input_tokens & desc_tokens)
+                if overlap > best_score:
+                    best_score = overlap
+                    best_match = props.get("id")
+            
+            if best_match and best_score > 0:
+                return best_match
+            
+            return None
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
 
+async def main():
+    async with aiohttp.ClientSession() as session:
+        user_input = "Tie 3: Valtatie 3 3.250"
+        print(f"Searching for: {user_input}\n")
+        
+        # Resolve section ID
+        resolved_id = await resolve_section_id(session, user_input)
+        print(f"Resolved ID: {resolved_id}\n")
+        
+        if not resolved_id:
+            print("Could not resolve section ID")
+            return
+        
+        # Fetch forecast data
+        async with session.get(FORECAST_SECTIONS_URL) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                
+                for fs in data.get("forecastSections", []):
+                    if fs.get("id") == resolved_id:
+                        print(f"Found section: {resolved_id}\n")
+                        print("Forecasts:")
+                        
+                        for i, f in enumerate(fs.get("forecasts", [])[:8]):
+                            if f.get("type") == "FORECAST":
+                                time_iso = f.get("time")
+                                
+                                # Parse UTC time and convert to EET
+                                dt_utc = datetime.fromisoformat(time_iso.replace("Z", "+00:00"))
+                                eet = timezone(timedelta(hours=2))
+                                dt_eet = dt_utc.astimezone(eet)
+                                time_str = dt_eet.strftime("%H:%M")
+                                
+                                # Get conditions
+                                overall_rc = f.get("overallRoadCondition")
+                                overall_text = ROAD_CONDITION_MAP.get(overall_rc, {}).get("fi", overall_rc or "")
+                                
+                                road_rc = f.get("forecastConditionReason", {}).get("roadCondition")
+                                road_text = ROAD_CONDITION_MAP.get(road_rc, {}).get("fi", road_rc or "")
+                                
+                                # Make specific condition lowercase
+                                if road_text:
+                                    road_text = road_text[0].lower() + road_text[1:] if len(road_text) > 0 else road_text
+                                
+                                # Combine
+                                if overall_text and road_text:
+                                    condition_text = f"{overall_text}, {road_text}"
+                                elif overall_text:
+                                    condition_text = overall_text
+                                elif road_text:
+                                    condition_text = road_text
+                                else:
+                                    condition_text = "Ei tietoa"
+                                
+                                print(f"- time: '{time_str}'")
+                                print(f"  condition: {condition_text}")
+                        
+                        return
+                
+                print(f"Section {resolved_id} not found in API data")
 
 if __name__ == "__main__":
-    asyncio.run(demo_search())
+    asyncio.run(main())

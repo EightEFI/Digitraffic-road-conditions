@@ -16,10 +16,27 @@
               "section_input": "Road section title (copy from Fintraffic map)"
             }
           }
+          ,
+          "monitor_type": {
+            "title": "Monitor Type",
+            "description": "Choose what to monitor for the selected road section.",
+            "data": {
+              "monitor_type": "Monitor"
+            }
+          },
+          "pick": {
+            "title": "Choose Exact Road Section",
+            "description": "Multiple metadata entries matched your input. Pick the exact section to use.",
+            "data": {
+              "pick": "Choose section"
+            }
+          }
         },
       "error": {
         "empty_search": "Please enter a search term",
         "no_results": "No road sections found",
+        "no_matches": "No matching road sections found. Check your input.",
+        "invalid_selection": "Invalid selection, please choose a valid section",
         "cannot_connect": "Connection failed"
       },
       "abort": {
