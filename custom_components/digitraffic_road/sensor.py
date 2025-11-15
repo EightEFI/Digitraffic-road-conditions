@@ -187,7 +187,8 @@ def format_measurement_key(key: str) -> str:
             continue
         # Default: Title case
         out.append(t.capitalize())
-    return "_".join(out)
+    # Friendly display: join tokens with spaces for readability
+    return " ".join(out)
 
 
 class DigitraficForecastSensor(CoordinatorEntity, SensorEntity):
