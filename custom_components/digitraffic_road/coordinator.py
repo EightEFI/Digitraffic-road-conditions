@@ -16,7 +16,7 @@ _LOGGER = logging.getLogger(__name__)
 class DigitraficDataCoordinator(DataUpdateCoordinator):
     """Coordinator to manage Digitraffic data updates."""
 
-    def __init__(self, hass: HomeAssistant, section_id: str):
+    def __init__(self, hass: HomeAssistant, section_id: str, language: str = "fi"):
         """Initialize the coordinator."""
         super().__init__(
             hass,
@@ -26,6 +26,7 @@ class DigitraficDataCoordinator(DataUpdateCoordinator):
         )
         self.section_id = section_id
         self.client = DigitraficClient(async_get_clientsession(hass))
+        self.language = language
         _LOGGER.debug("Initialized coordinator for section: %s", section_id)
 
     async def _async_update_data(self) -> Dict[str, Any]:
@@ -33,8 +34,8 @@ class DigitraficDataCoordinator(DataUpdateCoordinator):
         try:
             _LOGGER.debug("Updating data for section: %s", self.section_id)
             
-            conditions = await self.client.get_road_conditions(self.section_id)
-            forecast = await self.client.get_forecast(self.section_id)
+            conditions = await self.client.get_road_conditions(self.section_id, language=self.language)
+            forecast = await self.client.get_forecast(self.section_id, language=self.language)
             
             if conditions is None:
                 _LOGGER.warning("No conditions data for section: %s", self.section_id)

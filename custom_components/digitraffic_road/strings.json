@@ -2,17 +2,17 @@
   "config": {
     "step": {
       "user": {
+        "title": "Valitse kieli",
+        "description": "Valitse haluamasi käyttöliittymän kieli (Suomi tai English).",
+        "data": {
+          "language": "Kieli"
+        }
+      },
+      "section": {
         "title": "Lisää tieosuus",
         "description": "Syötä tarkka tieosuuden otsikko sivulta https://liikennetilanne.fintraffic.fi/kartta/\n\nKlikkaa tieosuutta FinTraffic kartalla ja kopioi tieosuus (esim. \"{example}\").\n\nTämä mahdollistaa tietyn tieosuuden olosuhteiden noutamisen",
         "data": {
           "section_input": "Tieosuuden otsikko (kopioi FinTraffic kartalta)"
-        }
-      },
-      "select": {
-        "title": "Select Road Section",
-        "description": "Found {found_count} matching road section(s). Select the one you want to monitor:",
-        "data": {
-          "road_section_id": "Road Section"
         }
       }
     },

@@ -2,21 +2,21 @@
   "en": {
     "config": {
       "step": {
-        "user": {
-          "title": "Search Road Section",
-          "description": "Enter a road number, location name, or description. Examples: E18, VT4, Perämerentie",
-          "data": {
-            "search_query": "Search road"
+          "user": {
+            "title": "Choose language",
+            "description": "Select UI language for this integration (Finnish or English).",
+            "data": {
+              "language": "Language"
+            }
+          },
+          "section": {
+            "title": "Add Road Section",
+            "description": "Enter the exact road section title from https://liikennetilanne.fintraffic.fi/kartta/\n\nClick on a road section in the Fintraffic map and copy the title shown (e.g., \"{example}\").\n\nThis allows you to monitor any specific road section with its own independent driving conditions.",
+            "data": {
+              "section_input": "Road section title (copy from Fintraffic map)"
+            }
           }
         },
-        "select": {
-          "title": "Select Road Section",
-          "description": "Select the specific road section to monitor",
-          "data": {
-            "road_section_id": "Road Section"
-          }
-        }
-      },
       "error": {
         "empty_search": "Please enter a search term",
         "no_results": "No road sections found",

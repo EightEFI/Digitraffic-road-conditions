@@ -6,7 +6,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import logging
 
 from .client import DigitraficClient
-from .const import DOMAIN, CONF_ROAD_SECTION, CONF_ROAD_SECTION_ID
+from .const import DOMAIN, CONF_ROAD_SECTION, CONF_ROAD_SECTION_ID, CONF_LANGUAGE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -18,40 +18,59 @@ class DigitraficRoadConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
 
     async def async_step_user(self, user_input=None):
-        """Handle the initial step - enter road section ID or title."""
+        """Initial step: ask preferred language, then proceed to section input."""
         errors = {}
-        
+
+        # If language selected, move to section input
+        if user_input is not None and "language" in user_input:
+            self.language = user_input.get("language")
+            return await self.async_step_section()
+
+        # Show language selection form
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("language", default="fi"): vol.In({"fi": "Suomi", "en": "English"}),
+                }
+            ),
+        )
+
+    async def async_step_section(self, user_input=None):
+        """Handle the step - enter road section ID or title."""
+        errors = {}
+
         # If user submitted input
         if user_input is not None:
             section_input = user_input.get("section_input", "").strip()
-            
+
             if not section_input:
                 errors["base"] = "empty_search"
             else:
                 _LOGGER.debug("Road section input: %s", section_input)
-                
+
                 # Use the input as-is for the section ID (will be used to fetch conditions)
-                # The input can be like "Tie 4: Kemintie 4.421" from the Fintraffic map
                 section_id = section_input.replace(" ", "_").replace(":", "").replace(".", "_")
                 section_name = section_input
-                
+
                 # Check if already configured
                 await self.async_set_unique_id(section_id)
                 self._abort_if_unique_id_configured()
-                
+
                 _LOGGER.debug("Creating config entry for section: %s", section_name)
-                
+
                 return self.async_create_entry(
                     title=section_name,
                     data={
                         CONF_ROAD_SECTION_ID: section_input,
                         CONF_ROAD_SECTION: section_name,
+                        CONF_LANGUAGE: getattr(self, "language", "fi"),
                     },
                 )
-        
+
         # Show input form
         return self.async_show_form(
-            step_id="user",
+            step_id="section",
             data_schema=vol.Schema(
                 {
                     vol.Required("section_input", description={"suggested_value": "Tie 4: Kemintie 4.421"}): str,

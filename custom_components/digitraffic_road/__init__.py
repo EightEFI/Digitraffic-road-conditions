@@ -4,7 +4,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN, CONF_ROAD_SECTION_ID
+from .const import DOMAIN, CONF_ROAD_SECTION_ID, CONF_LANGUAGE
 from .coordinator import DigitraficDataCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -17,9 +17,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     
     section_id = entry.data[CONF_ROAD_SECTION_ID]
-    
+    language = entry.data.get(CONF_LANGUAGE, "fi")
+
     # Create and setup coordinator
-    coordinator = DigitraficDataCoordinator(hass, section_id)
+    coordinator = DigitraficDataCoordinator(hass, section_id, language)
     await coordinator.async_config_entry_first_refresh()
     
     hass.data[DOMAIN][entry.entry_id] = coordinator

@@ -22,6 +22,18 @@ FINNISH_ROAD_CONDITIONS = [
     "Huono ajokeli",
 ]
 
+ENGLISH_ROAD_CONDITIONS = [
+    "Road surface is dry",
+    "Road surface is wet",
+    "Patches of ice on the road",
+    "Possible hoarfrost on the road",
+    "Slippery, ice or snow on the road",
+    "Snow or heavy rain",
+    "Heavy snow",
+    "Good driving conditions",
+    "Poor driving conditions",
+]
+
 # Precise mock road sections based on Finnish road structure
 # Format: "Road Type + Number: Location + KM marker"
 MOCK_ROAD_SECTIONS = [
@@ -189,7 +201,7 @@ class DigitraficClient:
             _LOGGER.error("Error fetching road sections: %s", err)
             return []
 
-    async def get_road_conditions(self, section_id: str) -> Optional[Dict[str, Any]]:
+    async def get_road_conditions(self, section_id: str, language: str = "fi") -> Optional[Dict[str, Any]]:
         """Fetch current road conditions for a specific section."""
         try:
             _LOGGER.debug("Fetching road conditions for section: %s", section_id)
@@ -201,8 +213,11 @@ class DigitraficClient:
             )
             location = section["location"] if section else section_id
             
-            # Use Finnish road condition descriptions
-            condition = FINNISH_ROAD_CONDITIONS[hash(section_id) % len(FINNISH_ROAD_CONDITIONS)]
+            # Choose language for condition descriptions
+            if language == "en":
+                condition = ENGLISH_ROAD_CONDITIONS[hash(section_id) % len(ENGLISH_ROAD_CONDITIONS)]
+            else:
+                condition = FINNISH_ROAD_CONDITIONS[hash(section_id) % len(FINNISH_ROAD_CONDITIONS)]
             
             return {
                 "features": [
@@ -223,7 +238,7 @@ class DigitraficClient:
             _LOGGER.error("Error fetching road conditions for %s: %s", section_id, err)
             return None
 
-    async def get_forecast(self, section_id: str) -> Optional[Dict[str, Any]]:
+    async def get_forecast(self, section_id: str, language: str = "fi") -> Optional[Dict[str, Any]]:
         """Fetch 12h forecast for a specific road section."""
         try:
             _LOGGER.debug("Fetching forecast for section: %s", section_id)
@@ -239,7 +254,10 @@ class DigitraficClient:
             
             for i in range(0, 12, 2):  # Every 2 hours
                 forecast_time = start_time + timedelta(hours=i)
-                condition = FINNISH_ROAD_CONDITIONS[i % len(FINNISH_ROAD_CONDITIONS)]
+                if language == "en":
+                    condition = ENGLISH_ROAD_CONDITIONS[i % len(ENGLISH_ROAD_CONDITIONS)]
+                else:
+                    condition = FINNISH_ROAD_CONDITIONS[i % len(FINNISH_ROAD_CONDITIONS)]
                 forecasts.append({
                     "type": "Feature",
                     "properties": {
