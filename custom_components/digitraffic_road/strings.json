@@ -8,6 +8,13 @@
           "language": "Kieli"
         }
       },
+      "monitor_type": {
+        "title": "Valitse seurattava tyyppi",
+        "description": "Haluatko seurata ajokelejä (tieosuus) vai TMS/LAM-mittausasemaa?",
+        "data": {
+          "monitor_type": "Seurattava tyyppi"
+        }
+      },
       "section": {
         "title": "Lisää tieosuus",
         "description": "Syötä tarkka tieosuuden otsikko sivulta https://liikennetilanne.fintraffic.fi/kartta/\n\nKlikkaa tieosuutta FinTraffic kartalla ja kopioi tieosuus (esim. \"{example}\").\n\nTämä mahdollistaa tietyn tieosuuden olosuhteiden noutamisen",
@@ -15,22 +22,30 @@
           "section_input": "Tieosuuden otsikko (kopioi FinTraffic kartalta)"
         }
       }
+      ,
+      "tms": {
+        "title": "Lisää TMS / LAM asema",
+        "description": "Syötä TMS/LAM -aseman nimi tai tunniste (esim. 'vt4 Simo Saukkoranta').",
+        "data": {
+          "tms_input": "TMS/LAM aseman nimi tai id"
+        }
+      }
     },
     "error": {
       "empty_search": "Syötä tieosuuden otsikko FinTraffic kartalta",
-      "no_results": "No road sections found. Try searching for a different road number or location name.",
-      "cannot_connect": "Ei voitu yhdistää DigiTraffic palveluihin. Yritä uudelleen",
-      "unknown": "An unexpected error occurred"
+      "no_results": "Ei tuloksia. Yritä eri tieosuutta tai sijaintia.",
+      "cannot_connect": "Ei voitu yhdistää Digitraffic -palveluihin. Yritä myöhemmin uudelleen.",
+      "unknown": "Tapahtui odottamaton virhe"
     },
     "abort": {
       "already_configured": "Tämä tieosuus on jo konfiguroitu",
-      "cannot_connect": "Ei voitu yhdistää DigiTraffic palveluihin"
+      "cannot_connect": "Ei voitu yhdistää Digitraffic -palveluihin"
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Digitraffic Road Conditions Options"
+        "title": "Digitraffic Road Conditions - Asetukset"
       }
     }
   }
