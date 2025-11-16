@@ -191,21 +191,36 @@ content: |
 ### Automation: Poor Road Conditions Alert
 
 ```yaml
-automation:
-  - alias: "Alert on icy road conditions"
-    trigger:
-      - platform: state
-        entity_id: sensor.valtatie_3_3_250_ajokeli_tällä_hetkellä
-    condition:
-      - condition: template
-        value_template: >
-          {{ 'jäätä' in trigger.to_state.state.lower() or 
-             'huono ajokeli' in trigger.to_state.state.lower() }}
-    action:
-      - service: notify.mobile_app_phone
-        data:
-          title: "⚠️ Road Conditions Alert"
-          message: "{{ trigger.to_state.state }} - Drive carefully!"
+alias: Kemintie ajokeli varoitus
+description: ""
+triggers:
+  - trigger: state
+    entity_id:
+      - sensor.kemintie_4_421_current_conditions
+conditions: []
+actions:
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: sensor.kemintie_4_421_current_conditions
+            state: Huono ajokeli
+        sequence:
+          - action: notify.mobile_app_phone
+            metadata: {}
+            data:
+              message: ⚠️ Driving conditions are poor
+              title: Kemintie
+      - conditions:
+          - condition: state
+            entity_id: sensor.kemintie_4_421_current_conditions
+            state: Erittäin huono ajokeli
+        sequence:
+          - action: notify.mobile_app_phone
+            metadata: {}
+            data:
+              message: ⚠️ Driving conditions are very poor
+              title: Kemintie
+mode: single
 ```
 
 ### Automation: Slow Traffic Alert (TMS)
