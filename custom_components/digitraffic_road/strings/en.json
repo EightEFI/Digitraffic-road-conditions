@@ -1,64 +1,69 @@
 {
-  "en": {
-    "config": {
-      "step": {
-          "user": {
-            "title": "Choose language / Valitse kieli",
-            "description": "Select UI language for this integration (Finnish or English).",
-            "data": {
-              "language": "Choose language / Valitse kieli"
-            }
-          },
-          "section": {
-            "title": "Add Road Section",
-            "description": "Enter the exact road section title from https://liikennetilanne.fintraffic.fi/kartta/\n\nClick on a road section in the Fintraffic map and copy the title shown (e.g., \"{example}\").\n\nThis allows you to monitor any specific road section with its own independent driving conditions.",
-            "data": {
-              "road_section": "Paste here the title of the road section"
-            }
-          }
-          ,
-          "tms": {
-            "title": "Add TMS Station",
-            "description": "Enter the TMS/LAM station name or identifier (e.g., 'vt4 Simo Saukkoranta').",
-            "data": {
-              "tms_id": "Paste here the title of the TMS station"
-            }
-          },
-          "monitor_type": {
-            "title": "Choose the type",
-            "description": "Choose what to monitor for the selected road section.",
-            "data": {
-              "monitor_type": "Choose type"
-            },
-            "data_description": {
-              "monitor_type": "Driving condition in a road section or Traffic measuring station (TMS)"
-            }
-          },
-          "pick": {
-            "title": "Choose Exact Road Section",
-            "description": "Multiple metadata entries matched your input. Pick the exact section to use.",
-            "data": {
-              "pick": "Pick a road section"
-            }
-          },
-          "tms_pick": {
-            "title": "Choose Exact TMS Station",
-            "description": "Multiple stations matched your input. Pick the exact station to use.",
-            "data": {
-              "pick": "Pick a TMS station"
-            }
-          }
-        },
-      "error": {
-        "empty_search": "Please enter a search term",
-        "no_results": "No road sections found",
-        "no_matches": "No matches",
-        "invalid_selection": "Invalid selection, please choose a valid section",
-        "cannot_connect": "Connection failed"
+  "config": {
+    "step": {
+      "user": {
+        "title": "Choose language / Valitse kieli",
+        "description": "Select UI language for this integration (Finnish or English).",
+        "data": {
+          "language": "Choose language / Valitse kieli"
+        }
       },
-      "abort": {
-        "already_configured": "This road section is already configured"
+      "section": {
+        "title": "Add Road Section",
+        "description": "Enter the exact road section title from https://liikennetilanne.fintraffic.fi/kartta/\n\nClick on a road section in the Fintraffic map and copy the title shown (e.g., \"{example}\").\n\nThis allows you to monitor any specific road section with its own independent driving conditions.",
+        "data": {
+          "road_section": "Paste here the title of the road section"
+        }
+      },
+      "tms": {
+        "title": "Add TMS Station",
+        "description": "Enter the TMS/LAM station name or identifier (e.g., 'vt4 Simo Saukkoranta').",
+        "data": {
+          "tms_id": "Paste here the title of the TMS station"
+        }
+      },
+      "monitor_type": {
+        "title": "Choose the type",
+        "description": "Choose what to monitor for the selected road section.",
+        "data": {
+          "monitor_type": "Choose type"
+        },
+        "data_description": {
+          "monitor_type": "Driving condition in a road section or Traffic measuring station (TMS)"
+        }
+      },
+      "pick": {
+        "title": "Choose Exact Road Section",
+        "description": "Multiple metadata entries matched your input. Pick the exact section to use.",
+        "data": {
+          "pick": "Pick a road section"
+        }
+      },
+      "tms_pick": {
+        "title": "Choose Exact TMS Station",
+        "description": "Multiple stations matched your input. Pick the exact station to use.",
+        "data": {
+          "pick": "Pick a TMS station"
+        }
+      }
+    },
+    "error": {
+      "empty_search": "Please enter a search term",
+      "no_results": "No road sections found",
+      "no_matches": "No matches",
+      "invalid_selection": "Invalid selection, please choose a valid section",
+      "cannot_connect": "Connection failed"
+    },
+    "abort": {
+      "already_configured": "This road section is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "DigiTraffic - Settings"
       }
     }
   }
 }
+
