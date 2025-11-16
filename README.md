@@ -1,4 +1,4 @@
-# DigiTraffic Road Conditions and TMS data
+# FinTraffic Road Conditions and TMS data
 
 A Home Assistant custom integration that provides real-time road conditions and traffic data from Finland's Digitraffic service in Finnish and English (https://www.digitraffic.fi/).
 
