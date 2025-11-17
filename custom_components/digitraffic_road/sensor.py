@@ -31,14 +31,10 @@ WEATHER_SENSOR_NAME_EN = {
     "ILMA": "Air temperature",
     "ILMA_DERIVAATTA": "Air temperature trend",
     "TIE_1": "Road temperature lane 1",
-    "TIE_2": "Road temperature lane 2",
     "TIE_1_DERIVAATTA": "Road temperature trend lane 1",
-    "TIE_2_DERIVAATTA": "Road temperature trend lane 2",
     "MAA_1": "Ground temperature sensor 1",
-    "MAA_2": "Ground temperature sensor 2",
     "KASTEPISTE": "Dew point",
     "J\u00c4\u00c4TYMISPISTE_1": "Freezing point sensor 1",
-    "J\u00c4\u00c4TYMISPISTE_2": "Freezing point sensor 2",
     "KESKITUULI": "Average wind speed",
     "MAKSIMITUULI": "Maximum wind speed",
     "TUULENSUUNTA": "Wind direction",
@@ -49,11 +45,8 @@ WEATHER_SENSOR_NAME_EN = {
     "SATEEN_OLOMUOTO_PWDXX": "Precipitation form",
     "N\u00c4KYVYYS_KM": "Visibility",
     "KELI_1": "Road condition lane 1",
-    "KELI_2": "Road condition lane 2",
     "VAROITUS_1": "Warning 1",
-    "VAROITUS_2": "Warning 2",
     "JOHTAVUUS_1": "Conductivity sensor 1",
-    "JOHTAVUUS_2": "Conductivity sensor 2",
 }
 
 WEATHER_SENSOR_DEFINITIONS = {
@@ -71,24 +64,11 @@ WEATHER_SENSOR_DEFINITIONS = {
         "state_class": SensorStateClass.MEASUREMENT,
         "icon": "mdi:road-variant",
     },
-    "TIE_2": {
-        "device_class": SensorDeviceClass.TEMPERATURE,
-        "state_class": SensorStateClass.MEASUREMENT,
-        "icon": "mdi:road-variant",
-    },
     "TIE_1_DERIVAATTA": {
         "icon": "mdi:thermometer-lines",
         "state_class": SensorStateClass.MEASUREMENT,
     },
-    "TIE_2_DERIVAATTA": {
-        "icon": "mdi:thermometer-lines",
-        "state_class": SensorStateClass.MEASUREMENT,
-    },
     "MAA_1": {
-        "device_class": SensorDeviceClass.TEMPERATURE,
-        "state_class": SensorStateClass.MEASUREMENT,
-    },
-    "MAA_2": {
         "device_class": SensorDeviceClass.TEMPERATURE,
         "state_class": SensorStateClass.MEASUREMENT,
     },
@@ -98,10 +78,6 @@ WEATHER_SENSOR_DEFINITIONS = {
         "icon": "mdi:water-percent",
     },
     "J\u00c4\u00c4TYMISPISTE_1": {
-        "device_class": SensorDeviceClass.TEMPERATURE,
-        "state_class": SensorStateClass.MEASUREMENT,
-    },
-    "J\u00c4\u00c4TYMISPISTE_2": {
         "device_class": SensorDeviceClass.TEMPERATURE,
         "state_class": SensorStateClass.MEASUREMENT,
     },
@@ -151,23 +127,11 @@ WEATHER_SENSOR_DEFINITIONS = {
         "use_description": True,
         "icon": "mdi:road",
     },
-    "KELI_2": {
-        "use_description": True,
-        "icon": "mdi:road",
-    },
     "VAROITUS_1": {
         "use_description": True,
         "icon": "mdi:alert-outline",
     },
-    "VAROITUS_2": {
-        "use_description": True,
-        "icon": "mdi:alert-outline",
-    },
     "JOHTAVUUS_1": {
-        "state_class": SensorStateClass.MEASUREMENT,
-        "icon": "mdi:current-ac",
-    },
-    "JOHTAVUUS_2": {
         "state_class": SensorStateClass.MEASUREMENT,
         "icon": "mdi:current-ac",
     },
@@ -199,6 +163,11 @@ def slugify_measurement_key(key: str) -> str:
         .replace(" ", "_")
     )
     return re.sub(r"[^a-z0-9_]+", "_", normalized)
+
+
+def should_skip_weather_key(key: str) -> bool:
+    """Determine if a weather key should be skipped (duplicates, unused channels)."""
+    return str(key).upper().endswith("_2")
 
 
 async def async_setup_entry(
@@ -258,26 +227,67 @@ async def async_setup_entry(
 
     if monitor_type == MONITOR_WEATHER and weather_station_id:
         station_name = data.get(CONF_ROAD_SECTION) or str(weather_station_id)
-        measurement_keys = list(WEATHER_SENSOR_DEFINITIONS.keys())
-
         existing = coordinator.data.get("measurements") if coordinator.data else {}
+
+        measurement_keys = []
         if isinstance(existing, dict):
-            for key in existing.keys():
-                if key not in measurement_keys:
-                    measurement_keys.append(key)
+            measurement_keys = [
+                key for key in existing.keys() if not should_skip_weather_key(key)
+            ]
 
-        entities = [
-            DigitraficWeatherMeasurementSensor(
-                coordinator,
-                weather_station_id,
-                station_name,
-                key,
-                WEATHER_SENSOR_DEFINITIONS.get(key, {}),
-            )
-            for key in measurement_keys
-        ]
+        if not measurement_keys:
+            measurement_keys = [
+                key
+                for key in WEATHER_SENSOR_DEFINITIONS.keys()
+                if not should_skip_weather_key(key)
+            ]
 
-        async_add_entities(entities)
+        created_keys: set[str] = set()
+
+        def _normalize_key(key: str) -> str:
+            return str(key).upper()
+
+        def _make_entities(keys) -> list:
+            entities: list = []
+            for raw_key in keys:
+                if should_skip_weather_key(raw_key):
+                    continue
+                norm = _normalize_key(raw_key)
+                if norm in created_keys:
+                    continue
+                created_keys.add(norm)
+                metadata = WEATHER_SENSOR_DEFINITIONS.get(raw_key, {})
+                entities.append(
+                    DigitraficWeatherMeasurementSensor(
+                        coordinator,
+                        weather_station_id,
+                        station_name,
+                        raw_key,
+                        metadata,
+                    )
+                )
+            return entities
+
+        initial_entities = _make_entities(measurement_keys)
+        if initial_entities:
+            async_add_entities(initial_entities)
+
+        async def _async_check_new_measurements() -> None:
+            if not coordinator.data:
+                return
+            measurements = coordinator.data.get("measurements")
+            if not isinstance(measurements, dict):
+                return
+            new_entities = _make_entities(measurements.keys())
+            if new_entities:
+                async_add_entities(new_entities)
+
+        def _handle_coordinator_update() -> None:
+            hass.async_create_task(_async_check_new_measurements())
+
+        remove_listener = coordinator.async_add_listener(_handle_coordinator_update)
+        config_entry.async_on_unload(remove_listener)
+
         return
 
     section_id = data.get(CONF_ROAD_SECTION_ID)
