@@ -3,7 +3,7 @@
     "step": {
       "monitor_type": {
         "title": "Valitse seurantatyyppi",
-        "description": "Haluatko seurata ajokelejä (tieosuus) vai TMS/LAM-mittausasemaa?",
+        "description": "Valitse mitä datalähdettä haluat seurata",
         "data": {
           "monitor_type": "Seurannan tyyppi"
         },
@@ -23,7 +23,7 @@
       },
       "tms": {
         "title": "Lisää LAM asema",
-        "description": "Syötä LAM pisteen FinTrafficin mukainen otsikko (esim. 'vt4 Simo Saukkoranta')",
+        "description": "Syötä LAM pisteen FinTrafficin mukainen otsikko sivulta https://liikennetilanne.fintraffic.fi/kartta/ (esim. 'vt4 Simo Saukkoranta')",
         "data": {
           "tms_id": "TMS asema"
         }

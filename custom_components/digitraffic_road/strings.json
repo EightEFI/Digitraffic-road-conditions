@@ -3,7 +3,7 @@
     "step": {
       "monitor_type": {
         "title": "Choose the type",
-        "description": "Choose what to monitor for the selected road section.",
+        "description": "Choose what kind of data do you want to monitor",
         "data": {
           "monitor_type": "Monitor type"
         },
@@ -23,7 +23,7 @@
       },
       "tms": {
         "title": "Add TMS Station",
-        "description": "Enter the TMS/LAM station name or identifier (e.g., 'vt4 Simo Saukkoranta').",
+        "description": "Enter the TMS station name or identifier (e.g., 'vt4 Simo Saukkoranta').",
         "data": {
           "tms_id": "TMS station"
         }
