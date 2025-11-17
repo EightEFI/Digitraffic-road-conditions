@@ -22,6 +22,13 @@
           "tms_id": "TMS asema"
         }
       },
+      "weather": {
+        "title": "Lisää tiesääasema",
+        "description": "Syötä tiesääaseman FinTraffic-nimi tai tunniste (esim. 'vt1 Espoo Nupuri').",
+        "data": {
+          "weather_station_id": "Tiesääasema"
+        }
+      },
       "pick": {
         "title": "Valitse tarkka tieosuus",
         "description": "Useita tuloksia löytyi. Valitse tarkka tieosuus.",
@@ -34,6 +41,13 @@
         "description": "Useita tuloksia löytyi. Valitse tarkka LAM asema.",
         "data": {
           "pick": "Valitse LAM asema"
+        }
+      },
+      "weather_pick": {
+        "title": "Valitse tarkka tiesääasema",
+        "description": "Useita asemia löytyi. Valitse oikea tiesääasema.",
+        "data": {
+          "pick": "Valitse tiesääasema"
         }
       }
     },
@@ -61,7 +75,8 @@
     "monitor_type_selector": {
       "options": {
         "conditions": "Keliolosuhteet tieosuudella",
-        "tms": "Liikenteen automaattinen mittausasema (LAM)"
+        "tms": "Liikenteen automaattinen mittausasema (LAM)",
+        "weather": "Tiesääasema"
       }
     }
   }

@@ -14,8 +14,10 @@ from .const import (
     CONF_LANGUAGE,
     CONF_MONITOR_TYPE,
     CONF_TMS_ID,
+    CONF_WEATHER_STATION_ID,
     MONITOR_CONDITIONS,
     MONITOR_TMS,
+    MONITOR_WEATHER,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,6 +42,8 @@ class DigitraficRoadConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self.monitor_type = user_input.get(CONF_MONITOR_TYPE)
             if self.monitor_type == MONITOR_TMS:
                 return await self.async_step_tms()
+            if self.monitor_type == MONITOR_WEATHER:
+                return await self.async_step_weather()
             return await self.async_step_section()
 
         return self.async_show_form(
@@ -51,7 +55,7 @@ class DigitraficRoadConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         default=MONITOR_CONDITIONS,
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
-                            options=[MONITOR_CONDITIONS, MONITOR_TMS],
+                            options=[MONITOR_CONDITIONS, MONITOR_TMS, MONITOR_WEATHER],
                             mode=selector.SelectSelectorMode.LIST,
                             translation_key="monitor_type_selector",
                         )
@@ -273,6 +277,96 @@ class DigitraficRoadConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         schema = vol.Schema({vol.Required("pick"): vol.In(choices)})
         return self.async_show_form(step_id="tms_pick", data_schema=schema, errors=errors)
+
+    async def async_step_weather(self, user_input=None):
+        """Handle the weather station input step."""
+        errors = {}
+
+        session = async_get_clientsession(self.hass)
+        client = DigitraficClient(session)
+
+        if user_input is not None:
+            station_input = user_input.get(CONF_WEATHER_STATION_ID, "").strip()
+            if not station_input:
+                errors["base"] = "empty_search"
+            else:
+                try:
+                    candidates = await client.async_search_weather_stations(station_input, max_results=12)
+                except Exception as err:
+                    _LOGGER.exception("Weather station search failed: %s", err)
+                    candidates = []
+
+                if not candidates:
+                    errors["base"] = "no_matches"
+                elif len(candidates) == 1:
+                    props = candidates[0]
+                    chosen_id = props.get("id")
+                    name_raw = props.get("name") or str(chosen_id)
+                    station_name = name_raw.replace("_", " ")
+
+                    monitor_type = MONITOR_WEATHER
+                    unique_id = f"{monitor_type}_{chosen_id}"
+                    await self.async_set_unique_id(unique_id)
+                    self._abort_if_unique_id_configured()
+
+                    data = {
+                        CONF_MONITOR_TYPE: monitor_type,
+                        CONF_LANGUAGE: getattr(self, "language", "en"),
+                        CONF_WEATHER_STATION_ID: chosen_id,
+                        CONF_ROAD_SECTION: station_name,
+                    }
+
+                    return self.async_create_entry(title=station_name, data=data)
+                else:
+                    self._weather_candidates = candidates
+                    self._weather_raw = station_input
+                    return await self.async_step_weather_pick()
+
+        return self.async_show_form(
+            step_id="weather",
+            data_schema=vol.Schema({vol.Required(CONF_WEATHER_STATION_ID): str}),
+            errors=errors,
+        )
+
+    async def async_step_weather_pick(self, user_input=None):
+        """Allow the user to pick one of the weather station candidates."""
+        if not hasattr(self, "_weather_candidates") or not self._weather_candidates:
+            return await self.async_step_weather()
+
+        errors = {}
+        if user_input is not None and "pick" in user_input:
+            pick_id = user_input.get("pick")
+            props = next((p for p in self._weather_candidates if str(p.get("id")) == str(pick_id)), None)
+            if not props:
+                errors["base"] = "invalid_selection"
+            else:
+                chosen_id = props.get("id")
+                name_raw = props.get("name") or str(chosen_id)
+                station_name = name_raw.replace("_", " ")
+
+                monitor_type = MONITOR_WEATHER
+                unique_id = f"{monitor_type}_{chosen_id}"
+                await self.async_set_unique_id(unique_id)
+                self._abort_if_unique_id_configured()
+
+                data = {
+                    CONF_MONITOR_TYPE: monitor_type,
+                    CONF_LANGUAGE: getattr(self, "language", "en"),
+                    CONF_WEATHER_STATION_ID: chosen_id,
+                    CONF_ROAD_SECTION: station_name,
+                }
+
+                return self.async_create_entry(title=station_name, data=data)
+
+        choices = {}
+        for props in self._weather_candidates:
+            sid = props.get("id")
+            name_raw = props.get("name") or ""
+            label = f"{sid} — {name_raw.replace('_', ' ')}"
+            choices[str(sid)] = label
+
+        schema = vol.Schema({vol.Required("pick"): vol.In(choices)})
+        return self.async_show_form(step_id="weather_pick", data_schema=schema, errors=errors)
 
     @staticmethod
     @callback

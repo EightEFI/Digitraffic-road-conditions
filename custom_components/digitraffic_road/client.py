@@ -17,6 +17,9 @@ TMS_STATIONS_URL = "https://tie.digitraffic.fi/api/tms/v1/stations"
 TMS_STATION_URL = "https://tie.digitraffic.fi/api/tms/v1/stations/{id}"
 TMS_SENSOR_CONSTANTS_URL = "https://tie.digitraffic.fi/api/tms/v1/stations/{id}/sensor-constants"
 TMS_STATION_DATA_URL = "https://tie.digitraffic.fi/api/tms/v1/stations/{id}/data"
+WEATHER_STATIONS_URL = "https://tie.digitraffic.fi/api/weather/v1/stations"
+WEATHER_STATION_URL = "https://tie.digitraffic.fi/api/weather/v1/stations/{id}"
+WEATHER_STATION_DATA_URL = "https://tie.digitraffic.fi/api/weather/v1/stations/{id}/data"
 
 # Finnish road condition descriptions
 FINNISH_ROAD_CONDITIONS = [
@@ -529,6 +532,95 @@ class DigitraficClient:
                 return await resp.json()
         except Exception as err:
             _LOGGER.debug("Error fetching TMS station data %s: %s", station_id, err)
+            return None
+
+    async def async_search_weather_stations(self, query: str, max_results: int = 12) -> List[Dict[str, Any]]:
+        """Search weather stations by name or id."""
+        if not query:
+            return []
+
+        try:
+            async with self.session.get(WEATHER_STATIONS_URL, headers={"Accept": "application/json"}) as resp:
+                if resp.status != 200:
+                    _LOGGER.debug("Weather stations endpoint returned %d", resp.status)
+                    return []
+                payload = await resp.json()
+        except Exception as err:
+            _LOGGER.debug("Error fetching weather stations: %s", err)
+            return []
+
+        features = payload.get("features", [])
+        norm_query = self._normalize_string(query)
+        tokens = set(norm_query.split())
+
+        matches: List[Tuple[int, Dict[str, Any]]] = []
+        for feat in features:
+            props = feat.get("properties", {})
+            name = props.get("name") or feat.get("name") or ""
+            if not name:
+                continue
+
+            # Allow direct id match
+            if str(props.get("id")) == query.strip():
+                matches.append((200, props))
+                continue
+
+            norm_name = self._normalize_string(name)
+            if norm_name == norm_query:
+                matches.append((100, props))
+                continue
+
+            common = tokens & set(norm_name.split())
+            if common:
+                matches.append((len(common), props))
+
+        if not matches:
+            return []
+
+        best: Dict[Any, Tuple[int, Dict[str, Any]]] = {}
+        for score, props in matches:
+            sid = props.get("id")
+            if sid not in best or score > best[sid][0]:
+                best[sid] = (score, props)
+
+        scored = sorted(best.values(), key=lambda item: -item[0])
+        results: List[Dict[str, Any]] = []
+        for _, props in scored[:max_results]:
+            results.append(
+                {
+                    "id": props.get("id"),
+                    "name": props.get("name"),
+                    "collectionStatus": props.get("collectionStatus"),
+                    "state": props.get("state"),
+                    "dataUpdatedTime": props.get("dataUpdatedTime"),
+                }
+            )
+        return results
+
+    async def async_get_weather_station(self, station_id: int) -> Optional[Dict[str, Any]]:
+        """Fetch metadata for a single weather station."""
+        try:
+            url = WEATHER_STATION_URL.format(id=station_id)
+            async with self.session.get(url, headers={"Accept": "application/json"}) as resp:
+                if resp.status != 200:
+                    _LOGGER.debug("Weather station %s returned %d", station_id, resp.status)
+                    return None
+                return await resp.json()
+        except Exception as err:
+            _LOGGER.debug("Error fetching weather station %s: %s", station_id, err)
+            return None
+
+    async def async_get_weather_station_data(self, station_id: int) -> Optional[Dict[str, Any]]:
+        """Fetch measurement data for a weather station."""
+        try:
+            url = WEATHER_STATION_DATA_URL.format(id=station_id)
+            async with self.session.get(url, headers={"Accept": "application/json"}) as resp:
+                if resp.status != 200:
+                    _LOGGER.debug("Weather station data %s returned %d", station_id, resp.status)
+                    return None
+                return await resp.json()
+        except Exception as err:
+            _LOGGER.debug("Error fetching weather station data %s: %s", station_id, err)
             return None
 
     def save_override(self, user_input: str, section_id: str) -> bool:

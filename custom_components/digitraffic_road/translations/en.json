@@ -22,6 +22,13 @@
           "tms_id": "TMS station"
         }
       },
+      "weather": {
+        "title": "Add Weather Station",
+        "description": "Enter the weather station name or identifier (e.g., 'vt1 Espoo Nupuri').",
+        "data": {
+          "weather_station_id": "Weather station"
+        }
+      },
       "pick": {
         "title": "Choose Exact Road Section",
         "description": "Multiple metadata entries matched your input. Pick the exact section to use.",
@@ -34,6 +41,13 @@
         "description": "Multiple stations matched your input. Pick the exact station to use.",
         "data": {
           "pick": "Pick a TMS station"
+        }
+      },
+      "weather_pick": {
+        "title": "Choose Exact Weather Station",
+        "description": "Multiple weather stations matched your input. Pick the exact station to use.",
+        "data": {
+          "pick": "Pick a weather station"
         }
       }
     },
@@ -61,7 +75,8 @@
     "monitor_type_selector": {
       "options": {
         "conditions": "Driving condition in a road section",
-        "tms": "Traffic measuring station (TMS)"
+        "tms": "Traffic measuring station (TMS)",
+        "weather": "Road weather station"
       }
     }
   }

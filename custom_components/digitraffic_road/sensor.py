@@ -1,20 +1,204 @@
 """Sensor platform for DigiTraffic."""
 import logging
 import re
-from datetime import timedelta
 from typing import Any, Dict
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.util.dt import utcnow
 
-from .const import DOMAIN, CONF_ROAD_SECTION, CONF_ROAD_SECTION_ID, CONF_TMS_ID, SENSOR_TYPE_CONDITIONS, SENSOR_TYPE_FORECAST
+from .const import (
+    DOMAIN,
+    CONF_MONITOR_TYPE,
+    CONF_ROAD_SECTION,
+    CONF_ROAD_SECTION_ID,
+    CONF_TMS_ID,
+    CONF_WEATHER_STATION_ID,
+    MONITOR_CONDITIONS,
+    MONITOR_TMS,
+    MONITOR_WEATHER,
+    SENSOR_TYPE_CONDITIONS,
+    SENSOR_TYPE_FORECAST,
+)
 from .coordinator import DigitraficDataCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+
+WEATHER_SENSOR_NAME_EN = {
+    "ILMA": "Air temperature",
+    "ILMA_DERIVAATTA": "Air temperature trend",
+    "TIE_1": "Road temperature lane 1",
+    "TIE_2": "Road temperature lane 2",
+    "TIE_1_DERIVAATTA": "Road temperature trend lane 1",
+    "TIE_2_DERIVAATTA": "Road temperature trend lane 2",
+    "MAA_1": "Ground temperature sensor 1",
+    "MAA_2": "Ground temperature sensor 2",
+    "KASTEPISTE": "Dew point",
+    "J\u00c4\u00c4TYMISPISTE_1": "Freezing point sensor 1",
+    "J\u00c4\u00c4TYMISPISTE_2": "Freezing point sensor 2",
+    "KESKITUULI": "Average wind speed",
+    "MAKSIMITUULI": "Maximum wind speed",
+    "TUULENSUUNTA": "Wind direction",
+    "ILMAN_KOSTEUS": "Relative humidity",
+    "SADE": "Weather description",
+    "SADE_INTENSITEETTI": "Precipitation intensity",
+    "SADESUMMA": "Precipitation sum",
+    "SATEEN_OLOMUOTO_PWDXX": "Precipitation form",
+    "N\u00c4KYVYYS_KM": "Visibility",
+    "KELI_1": "Road condition lane 1",
+    "KELI_2": "Road condition lane 2",
+    "VAROITUS_1": "Warning 1",
+    "VAROITUS_2": "Warning 2",
+    "JOHTAVUUS_1": "Conductivity sensor 1",
+    "JOHTAVUUS_2": "Conductivity sensor 2",
+}
+
+WEATHER_SENSOR_DEFINITIONS = {
+    "ILMA": {
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "icon": "mdi:thermometer",
+    },
+    "ILMA_DERIVAATTA": {
+        "icon": "mdi:thermometer-lines",
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "TIE_1": {
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "icon": "mdi:road-variant",
+    },
+    "TIE_2": {
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "icon": "mdi:road-variant",
+    },
+    "TIE_1_DERIVAATTA": {
+        "icon": "mdi:thermometer-lines",
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "TIE_2_DERIVAATTA": {
+        "icon": "mdi:thermometer-lines",
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "MAA_1": {
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "MAA_2": {
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "KASTEPISTE": {
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "icon": "mdi:water-percent",
+    },
+    "J\u00c4\u00c4TYMISPISTE_1": {
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "J\u00c4\u00c4TYMISPISTE_2": {
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "KESKITUULI": {
+        "device_class": SensorDeviceClass.WIND_SPEED,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "icon": "mdi:weather-windy",
+    },
+    "MAKSIMITUULI": {
+        "device_class": SensorDeviceClass.WIND_SPEED,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "icon": "mdi:weather-windy",
+    },
+    "TUULENSUUNTA": {
+        "device_class": SensorDeviceClass.WIND_DIRECTION,
+        "icon": "mdi:compass",
+    },
+    "ILMAN_KOSTEUS": {
+        "device_class": SensorDeviceClass.HUMIDITY,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "icon": "mdi:water-percent",
+    },
+    "SADE": {
+        "use_description": True,
+        "icon": "mdi:weather-pouring",
+    },
+    "SADE_INTENSITEETTI": {
+        "device_class": SensorDeviceClass.PRECIPITATION_INTENSITY,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "icon": "mdi:weather-pouring",
+    },
+    "SADESUMMA": {
+        "device_class": SensorDeviceClass.PRECIPITATION,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "icon": "mdi:water",
+    },
+    "SATEEN_OLOMUOTO_PWDXX": {
+        "use_description": True,
+        "icon": "mdi:weather-snowy-rainy",
+    },
+    "N\u00c4KYVYYS_KM": {
+        "device_class": SensorDeviceClass.DISTANCE,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "icon": "mdi:binoculars",
+    },
+    "KELI_1": {
+        "use_description": True,
+        "icon": "mdi:road",
+    },
+    "KELI_2": {
+        "use_description": True,
+        "icon": "mdi:road",
+    },
+    "VAROITUS_1": {
+        "use_description": True,
+        "icon": "mdi:alert-outline",
+    },
+    "VAROITUS_2": {
+        "use_description": True,
+        "icon": "mdi:alert-outline",
+    },
+    "JOHTAVUUS_1": {
+        "state_class": SensorStateClass.MEASUREMENT,
+        "icon": "mdi:current-ac",
+    },
+    "JOHTAVUUS_2": {
+        "state_class": SensorStateClass.MEASUREMENT,
+        "icon": "mdi:current-ac",
+    },
+}
+
+
+def _humanize_weather_key(key: str) -> str:
+    text = key.replace("_", " ")
+    humanized = text.title()
+    humanized = humanized.replace("Pwdxx", "PWDXX")
+    humanized = humanized.replace("Km", "km")
+    return humanized
+
+
+def format_weather_measurement_name(key: str, language: str) -> str:
+    """Return a localized display name for a weather measurement key."""
+    if language == "en":
+        return WEATHER_SENSOR_NAME_EN.get(key, _humanize_weather_key(key))
+    return _humanize_weather_key(key)
+
+
+def slugify_measurement_key(key: str) -> str:
+    """Return a safe unique-id suffix derived from the measurement key."""
+    normalized = key.lower()
+    normalized = (
+        normalized.replace("ä", "a")
+        .replace("ö", "o")
+        .replace("å", "a")
+        .replace(" ", "_")
+    )
+    return re.sub(r"[^a-z0-9_]+", "_", normalized)
 
 
 async def async_setup_entry(
@@ -25,15 +209,23 @@ async def async_setup_entry(
     """Set up sensor platform."""
     coordinator: DigitraficDataCoordinator = hass.data[DOMAIN][config_entry.entry_id]
 
-    # Support both road-section based entries and TMS-based entries.
-    # If this is a TMS/LAM entry, create LAM-specific sensors instead of
-    # the generic current conditions and forecast sensors.
-    tms_id = config_entry.data.get(CONF_TMS_ID)
-    if tms_id:
-        section_name = config_entry.data.get(CONF_ROAD_SECTION) or str(tms_id)
+    data = config_entry.data
 
-        # List of LAM measurement keys the user requested. These are measurement
-        # constants often available from the TMS measurement feeds.
+    monitor_type = data.get(CONF_MONITOR_TYPE)
+    tms_id = data.get(CONF_TMS_ID)
+    weather_station_id = data.get(CONF_WEATHER_STATION_ID)
+
+    if monitor_type is None:
+        if tms_id:
+            monitor_type = MONITOR_TMS
+        elif weather_station_id:
+            monitor_type = MONITOR_WEATHER
+        else:
+            monitor_type = MONITOR_CONDITIONS
+
+    if monitor_type == MONITOR_TMS and tms_id:
+        section_name = data.get(CONF_ROAD_SECTION) or str(tms_id)
+
         lam_measurement_keys = [
             "KESKINOPEUS_5MIN_LIUKUVA_SUUNTA1",
             "KESKINOPEUS_5MIN_LIUKUVA_SUUNTA2",
@@ -55,25 +247,41 @@ async def async_setup_entry(
             "OHITUKSET_60MIN_KIINTEA_SUUNTA2_MS2",
         ]
 
-        entities = []
-
-        # Sensors for sensor-constant values (VVAPAAS etc.) will be created
-        # dynamically based on what the coordinator fetches. We create a
-        # sensor entity per requested measurement key — the entity will look
-        # up values in the coordinator data when available.
-        for key in lam_measurement_keys:
-            entities.append(DigitraficTmsMeasurementSensor(coordinator, tms_id, section_name, key))
-
-        # Additionally create sensors for sensor constant values returned by
-        # the /sensor-constants endpoint (VVAPAAS, MS1/MS2, etc.)
+        entities = [
+            DigitraficTmsMeasurementSensor(coordinator, tms_id, section_name, key)
+            for key in lam_measurement_keys
+        ]
         entities.append(DigitraficTmsConstantsSensor(coordinator, tms_id, section_name))
 
         async_add_entities(entities)
         return
 
-    # Default behavior: create the two generic sensors for road section forecasts
-    section_id = config_entry.data.get(CONF_ROAD_SECTION_ID)
-    section_name = config_entry.data.get(CONF_ROAD_SECTION) or section_id
+    if monitor_type == MONITOR_WEATHER and weather_station_id:
+        station_name = data.get(CONF_ROAD_SECTION) or str(weather_station_id)
+        measurement_keys = list(WEATHER_SENSOR_DEFINITIONS.keys())
+
+        existing = coordinator.data.get("measurements") if coordinator.data else {}
+        if isinstance(existing, dict):
+            for key in existing.keys():
+                if key not in measurement_keys:
+                    measurement_keys.append(key)
+
+        entities = [
+            DigitraficWeatherMeasurementSensor(
+                coordinator,
+                weather_station_id,
+                station_name,
+                key,
+                WEATHER_SENSOR_DEFINITIONS.get(key, {}),
+            )
+            for key in measurement_keys
+        ]
+
+        async_add_entities(entities)
+        return
+
+    section_id = data.get(CONF_ROAD_SECTION_ID)
+    section_name = data.get(CONF_ROAD_SECTION) or section_id
 
     entities = [
         DigitraficCurrentConditionsSensor(coordinator, section_id, section_name),
@@ -284,6 +492,126 @@ class DigitraficForecastSensor(CoordinatorEntity, SensorEntity):
     def icon(self) -> str:
         """Return the icon."""
         return "mdi:weather-cloudy"
+
+
+class DigitraficWeatherMeasurementSensor(CoordinatorEntity, SensorEntity):
+    """Sensor entity representing a single weather-station measurement."""
+
+    def __init__(
+        self,
+        coordinator: DigitraficDataCoordinator,
+        station_id: int | str,
+        station_name: str,
+        measurement_key: str,
+        metadata: Dict[str, Any],
+    ) -> None:
+        super().__init__(coordinator)
+        self.station_id = station_id
+        self.measurement_key = measurement_key
+        self._metadata = metadata or {}
+        self._use_description = bool(self._metadata.get("use_description"))
+
+        slug = slugify_measurement_key(measurement_key)
+        self._attr_unique_id = f"{DOMAIN}_weather_{station_id}_{slug}"
+
+        friendly_name = self._metadata.get(
+            "name_fi" if coordinator.language == "fi" else "name_en"
+        )
+        if not friendly_name:
+            friendly_name = format_weather_measurement_name(measurement_key, coordinator.language)
+
+        self._attr_name = f"{format_station_name(str(station_name))} - {friendly_name}"
+
+        device_class = self._metadata.get("device_class")
+        state_class = self._metadata.get("state_class")
+        icon = self._metadata.get("icon")
+
+        if device_class:
+            self._attr_device_class = device_class
+        if state_class:
+            self._attr_state_class = state_class
+        if icon:
+            self._attr_icon = icon
+
+    def _get_measurement(self) -> Dict[str, Any] | None:
+        data = self.coordinator.data or {}
+        measurements = data.get("measurements") or {}
+        if not isinstance(measurements, dict):
+            return None
+
+        measurement = measurements.get(self.measurement_key)
+        if measurement is not None:
+            return measurement
+
+        for key, value in measurements.items():
+            if isinstance(key, str) and key.lower() == self.measurement_key.lower():
+                return value
+
+        return None
+
+    @property
+    def available(self) -> bool:
+        if not self.coordinator.last_update_success:
+            return False
+        return self._get_measurement() is not None
+
+    @property
+    def state(self) -> Any:
+        measurement = self._get_measurement()
+        if not measurement:
+            return None
+
+        if self._use_description:
+            lang = self.coordinator.language or "fi"
+            desc_key = "sensorValueDescriptionFi" if lang == "fi" else "sensorValueDescriptionEn"
+            description = (
+                measurement.get(desc_key)
+                or measurement.get("sensorValueDescriptionFi")
+                or measurement.get("sensorValueDescriptionEn")
+            )
+            return description or measurement.get("value")
+
+        return measurement.get("value")
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        if self._use_description:
+            return None
+        measurement = self._get_measurement()
+        if not measurement:
+            return None
+        return measurement.get("unit")
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        measurement = self._get_measurement()
+        if not measurement:
+            return {}
+
+        attrs: Dict[str, Any] = {
+            "sensor_id": measurement.get("id"),
+            "measured_time": measurement.get("measuredTime"),
+        }
+
+        if not self._use_description:
+            attrs["raw_value"] = measurement.get("value")
+
+        if measurement.get("unit"):
+            attrs["unit"] = measurement.get("unit")
+
+        desc_fi = measurement.get("sensorValueDescriptionFi")
+        if desc_fi:
+            attrs["description_fi"] = desc_fi
+
+        desc_en = measurement.get("sensorValueDescriptionEn")
+        if desc_en:
+            attrs["description_en"] = desc_en
+
+        data_updated = (self.coordinator.data or {}).get("data_updated_time")
+        if data_updated:
+            attrs["station_data_updated_time"] = data_updated
+
+        return attrs
 
 
 class DigitraficTmsConstantsSensor(CoordinatorEntity, SensorEntity):
