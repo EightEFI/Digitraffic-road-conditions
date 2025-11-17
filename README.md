@@ -294,7 +294,6 @@ series:
       legend_value: false
 ```
 ![alt text](https://i.imgur.com/SeREpr9.png "Dashboard card using ApexCharts-card")
-https://i.imgur.com/SeREpr9.png
 
 
 ## Technical Details
