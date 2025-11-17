@@ -6,14 +6,6 @@
         "description": "Valitse mitä datalähdettä haluat seurata",
         "data": {
           "monitor_type": "Seurannan tyyppi"
-        },
-        "data_description": {
-          "monitor_type": {
-            "options": {
-              "conditions": "Keliolosuhteet tieosuudella",
-              "tms": "Liikenteen automaattinen mittausasema (LAM)"
-            }
-          }
         }
       },
       "section": {
@@ -62,6 +54,14 @@
     "step": {
       "init": {
         "title": "DigiTraffic - Asetukset"
+      }
+    }
+  },
+  "selector": {
+    "monitor_type": {
+      "options": {
+        "conditions": "Keliolosuhteet tieosuudella",
+        "tms": "Liikenteen automaattinen mittausasema (LAM)"
       }
     }
   }
