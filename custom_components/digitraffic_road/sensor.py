@@ -1,5 +1,7 @@
 """Sensor platform for DigiTraffic."""
+import json
 import logging
+import os
 import re
 from typing import Any, Dict
 
@@ -25,6 +27,36 @@ from .const import (
 from .coordinator import DigitraficDataCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+# Cache for loaded translations
+_TRANSLATION_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
+def _load_translations(language: str = "fi") -> Dict[str, Any]:
+    """Load translations from JSON file."""
+    if language in _TRANSLATION_CACHE:
+        return _TRANSLATION_CACHE[language]
+    
+    try:
+        translation_file = os.path.join(
+            os.path.dirname(__file__),
+            "translations",
+            f"{language}.json"
+        )
+        with open(translation_file, 'r', encoding='utf-8') as f:
+            translations = json.load(f)
+            _TRANSLATION_CACHE[language] = translations
+            return translations
+    except Exception as e:
+        _LOGGER.warning("Failed to load translations for %s: %s", language, e)
+        return {}
+
+
+def _get_datapoint_translation(key: str, language: str = "fi") -> str:
+    """Get translated name for a datapoint from translation files."""
+    translations = _load_translations(language)
+    datapoints = translations.get("sensor", {}).get("datapoints", {})
+    return datapoints.get(key, key)
 
 
 WEATHER_SENSOR_NAME_EN = {
@@ -148,6 +180,12 @@ def _humanize_weather_key(key: str) -> str:
 
 def format_weather_measurement_name(key: str, language: str) -> str:
     """Return a localized display name for a weather measurement key."""
+    # Try to get translation from JSON files first
+    translated = _get_datapoint_translation(key, language)
+    if translated != key:
+        return translated
+    
+    # Fallback to old behavior for backwards compatibility
     if language == "en":
         return WEATHER_SENSOR_NAME_EN.get(key, _humanize_weather_key(key))
     return _humanize_weather_key(key)
@@ -387,13 +425,19 @@ def format_measurement_key(key: str, language: str = "fi") -> str:
         language: Language code ('fi' or 'en').
 
     Rules:
-    - Translate to English if language is 'en'.
+    - Try to get translation from JSON files first.
+    - Fallback to hardcoded translations for backwards compatibility.
     - Otherwise title-case Finnish tokens.
     """
     if not key:
         return ""
     
-    # English translations map
+    # Try to get translation from JSON files first
+    translated = _get_datapoint_translation(key, language)
+    if translated != key:
+        return translated
+    
+    # English translations map (kept for backwards compatibility)
     english_translations = {
         "KESKINOPEUS_5MIN_LIUKUVA_SUUNTA1": "Rolling avg speed 5min sliding dir 1",
         "KESKINOPEUS_5MIN_LIUKUVA_SUUNTA2": "Rolling avg speed 5min sliding dir 2",
