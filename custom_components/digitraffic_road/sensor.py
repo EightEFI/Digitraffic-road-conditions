@@ -592,26 +592,28 @@ class DigitraficWeatherMeasurementSensor(CoordinatorEntity, SensorEntity):
         measurement_key: str,
         metadata: Dict[str, Any],
     ) -> None:
-        # MUST set _attr_entity_registry_enabled_default BEFORE super().__init__()
-        self._attr_entity_registry_enabled_default = measurement_key in WEATHER_ENABLED_BY_DEFAULT
-        
-        super().__init__(coordinator)
+        # Store attributes needed before super().__init__()
         self.station_id = station_id
         self.measurement_key = measurement_key
         self._metadata = metadata or {}
         self._use_description = bool(self._metadata.get("use_description"))
 
+        # Set unique_id BEFORE super().__init__() - required for entity registry
         slug = slugify_measurement_key(measurement_key)
         self._attr_unique_id = f"{DOMAIN}_weather_{station_id}_{slug}"
-
+        
+        # Set enabled default BEFORE super().__init__() - required for entity registry
+        self._attr_entity_registry_enabled_default = measurement_key in WEATHER_ENABLED_BY_DEFAULT
+        
+        # Set name before super().__init__()
         friendly_name = self._metadata.get(
             "name_fi" if coordinator.language == "fi" else "name_en"
         )
         if not friendly_name:
             friendly_name = format_weather_measurement_name(measurement_key, coordinator.language)
-
         self._attr_name = f"{format_station_name(str(station_name))} - {friendly_name}"
 
+        # Set device class, state class, and icon before super().__init__()
         device_class = self._metadata.get("device_class")
         state_class = self._metadata.get("state_class")
         icon = self._metadata.get("icon")
@@ -622,6 +624,9 @@ class DigitraficWeatherMeasurementSensor(CoordinatorEntity, SensorEntity):
             self._attr_state_class = state_class
         if icon:
             self._attr_icon = icon
+        
+        # Call super().__init__() AFTER all attributes are set
+        super().__init__(coordinator)
 
     def _get_measurement(self) -> Dict[str, Any] | None:
         data = self.coordinator.data or {}
