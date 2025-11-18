@@ -31,6 +31,22 @@ _LOGGER = logging.getLogger(__name__)
 # Cache for loaded translations
 _TRANSLATION_CACHE: Dict[str, Dict[str, Any]] = {}
 
+# Weather station measurements that are enabled by default
+# All other measurements will be created but disabled
+WEATHER_ENABLED_BY_DEFAULT = {
+    "ILMA",
+    "ILMANPAINE",
+    "ILMAN_KOSTEUS",
+    "JÄÄN_MÄÄRÄ1",
+    "JÄÄTYMISPISTE_1",
+    "KASTEPISTE",
+    "MAA_1",
+    "SADE_INTENSITEETTI",
+    "VALLITSEVA_SÄÄ",
+    "KESKITUULI",
+    "TUULENSUUNTA",
+}
+
 
 def _load_translations(language: str = "fi") -> Dict[str, Any]:
     """Load translations from JSON file."""
@@ -586,6 +602,9 @@ class DigitraficWeatherMeasurementSensor(CoordinatorEntity, SensorEntity):
             self._attr_state_class = state_class
         if icon:
             self._attr_icon = icon
+        
+        # Set entity_registry_enabled_default based on measurement key
+        self._attr_entity_registry_enabled_default = measurement_key in WEATHER_ENABLED_BY_DEFAULT
 
     def _get_measurement(self) -> Dict[str, Any] | None:
         data = self.coordinator.data or {}
