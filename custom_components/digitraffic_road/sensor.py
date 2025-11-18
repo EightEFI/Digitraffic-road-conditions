@@ -592,6 +592,9 @@ class DigitraficWeatherMeasurementSensor(CoordinatorEntity, SensorEntity):
         measurement_key: str,
         metadata: Dict[str, Any],
     ) -> None:
+        # Set entity_registry_enabled_default BEFORE calling super().__init__
+        self._attr_entity_registry_enabled_default = measurement_key in WEATHER_ENABLED_BY_DEFAULT
+        
         super().__init__(coordinator)
         self.station_id = station_id
         self.measurement_key = measurement_key
@@ -619,9 +622,6 @@ class DigitraficWeatherMeasurementSensor(CoordinatorEntity, SensorEntity):
             self._attr_state_class = state_class
         if icon:
             self._attr_icon = icon
-        
-        # Set entity_registry_enabled_default based on measurement key
-        self._attr_entity_registry_enabled_default = measurement_key in WEATHER_ENABLED_BY_DEFAULT
 
     def _get_measurement(self) -> Dict[str, Any] | None:
         data = self.coordinator.data or {}
