@@ -17,8 +17,10 @@ A Home Assistant custom integration that provides real-time road conditions and 
 
 ### 🌡 Road Weather Stations / Tiesääasemat
 - **Live Measurements**: Air, road-surface and ground temperatures, dew point, humidity, wind, precipitation, visibility, and more
+- **Smart Entity Management**: Only 11 essential sensors enabled by default - enable additional sensors as needed
 - **Dynamic Sensors**: Entities appear only for measurements the station actually reports, with new sensors added automatically when new data streams become active
-- **Textual States**: Weather descriptions, precipitation forms, warnings and road-condition codes rendered in Finnish or English based on integration language
+- **Textual States**: Weather descriptions (WMO codes), precipitation forms, warnings and road-condition codes rendered in Finnish or English based on integration language
+- **212 Translated Datapoints**: All measurement types have proper Finnish and English translations
 
 ### ⚙️ Integration Features
 - **Multi-language UI**: Choose between Finnish and English during setup
@@ -150,8 +152,40 @@ Each weather station exposes entities for every measurement in the live data fee
 - **Derived metrics**: `sensor.<station>_ilma_derivaatta`, `sensor.<station>_tie_1_derivaatta`, dew point, freezing point
 - **Atmospheric data**: humidity, wind speed/direction, visibility, precipitation intensity and amount
 - **Qualitative states**: precipitation form (`sensor.<station>_sateen_olomuoto_pwdxx`), road condition lanes, warnings (values rendered as translated text)
+- **Weather conditions**: `sensor.<station>_vallitseva_sää` displays human-readable WMO weather descriptions (100 codes translated in Finnish and English)
 
 If a new measurement type starts publishing (for example an additional road-surface probe), the integration will register the matching entity automatically after the next data refresh.
+
+#### Default Enabled Sensors
+
+To avoid overwhelming the UI, only **11 essential weather sensors** are enabled by default:
+
+1. **ILMA** - Air temperature
+2. **ILMANPAINE** - Air pressure  
+3. **ILMAN_KOSTEUS** - Air humidity
+4. **JÄÄN_MÄÄRÄ1** - Ice amount
+5. **JÄÄTYMISPISTE_1** - Freezing point
+6. **KASTEPISTE** - Dew point
+7. **MAA_1** - Ground temperature
+8. **SADE_INTENSITEETTI** - Precipitation intensity
+9. **VALLITSEVA_SÄÄ** - Prevailing weather (WMO code)
+10. **KESKITUULI** - Average wind speed
+11. **TUULENSUUNTA** - Wind direction
+
+All other sensors are created but **disabled by default**. You can enable additional sensors in **Settings** → **Devices & Services** → select your weather station → click the entity you want to enable.
+
+#### WMO Weather Codes
+
+The `VALLITSEVA_SÄÄ` (Prevailing Weather) sensor translates numeric WMO Code Table 4677 values to descriptive text:
+
+**Examples:**
+- `0` → "Ei merkittävää säätä" (FI) / "No significant weather" (EN)
+- `51` → "Jatkuvaa tihkua, heikko" (FI) / "Drizzle, continuous, slight" (EN)
+- `61` → "Jatkuvaa vesisadetta, heikko" (FI) / "Rain, continuous, slight" (EN)
+- `71` → "Jatkuvaa lumisadetta, heikko" (FI) / "Snow, continuous, slight" (EN)
+- `95` → "Heikko tai kohtalainen ukkonen, vesi- tai lumisade" (FI) / "Slight or moderate thunderstorm with rain or snow" (EN)
+
+All 100 WMO codes (0-99) are fully translated and stored in the translation files for easy maintenance.
 
 ## Road Condition Reference
 
@@ -390,6 +424,19 @@ The integration uses intelligent matching to find road sections:
 3. Wait 5 minutes for first data update
 4. Check logs for API errors
 5. Verify the section ID is valid (check logs for resolved ID)
+
+### Weather Station Entities Not Disabled by Default
+
+**Issue**: All weather station entities are enabled instead of just the 11 essential ones
+
+**Solutions**:
+1. This feature only affects **newly created entities**
+2. If you added the station before v0.1.63, entities were created as enabled
+3. To apply the disabled-by-default setting:
+   - Remove the weather station integration instance
+   - Restart Home Assistant
+   - Re-add the weather station
+4. Only 11 essential sensors will be enabled; enable others manually as needed
 
 ### TMS Measurements Not Updating
 
