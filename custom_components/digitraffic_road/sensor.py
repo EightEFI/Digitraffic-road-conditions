@@ -592,9 +592,6 @@ class DigitraficWeatherMeasurementSensor(CoordinatorEntity, SensorEntity):
         measurement_key: str,
         metadata: Dict[str, Any],
     ) -> None:
-        # Set entity_registry_enabled_default BEFORE calling super().__init__
-        self._attr_entity_registry_enabled_default = measurement_key in WEATHER_ENABLED_BY_DEFAULT
-        
         super().__init__(coordinator)
         self.station_id = station_id
         self.measurement_key = measurement_key
@@ -714,6 +711,11 @@ class DigitraficWeatherMeasurementSensor(CoordinatorEntity, SensorEntity):
             attrs["station_data_updated_time"] = data_updated
 
         return attrs
+
+    @property
+    def entity_registry_enabled_default(self) -> bool:
+        """Return if the entity should be enabled when first added to the entity registry."""
+        return self.measurement_key in WEATHER_ENABLED_BY_DEFAULT
 
 
 class DigitraficTmsConstantsSensor(CoordinatorEntity, SensorEntity):
